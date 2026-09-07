@@ -238,9 +238,9 @@
 
             const colliders = [];
             const ramps = [];     
-            const customBuilds = []; // Liste des constructions posées pour pouvoir les casser à la pioche
+            const customBuilds = []; 
 
-            // SOL TEXTURÉ
+            // SOL TEXTURÉ DE BASE
             const floorGroup = new THREE.Group();
             const tileSize = 6;
             for (let x = -30; x < 30; x += tileSize) {
@@ -303,7 +303,7 @@
             let isGameOver = false;
             let matchStarted = false;
 
-            let currentBuildMode = 'WEAPON'; // 'WEAPON', 'WALL', 'FLOOR', 'STAIR'
+            let currentBuildMode = 'WEAPON'; 
 
             camera.position.set(0, 2, 15);
 
@@ -369,7 +369,6 @@
                 if (!matchStarted || isGameOver || isSettingsOpen) return;
 
                 if (key === 'c') {
-                    // Touche raccourci pour équiper la pioche rapidement
                     equipWeapon('Pickaxe', 'Pioche', 35, 1.5);
                     currentBuildMode = 'WEAPON';
                     updateBuildHUD();
@@ -414,7 +413,7 @@
                 }
             }
 
-            // GESTION DU CLIC : TIR, PIOCHE OU CONSTRUCTION EN CHAÎNE
+            // GESTION DU CLIC : INTERCONNEXION DES SOLS, MURS ET ESCALIERS
             window.addEventListener('mousedown', (e) => {
                 if (e.button !== 0 || document.pointerLockElement !== gameScreen || !matchStarted || isGameOver || isSettingsOpen) return;
 
@@ -424,9 +423,8 @@
                 dir.normalize();
 
                 if (currentBuildMode === 'WEAPON') {
-                    // Si c'est la pioche, gestion des dégâts de corps à corps et de destruction de constructions au clic
                     if (chosenWeapon.id === 'Pickaxe') {
-                        // Dégâts au joueur adverse si proche
+                        // Dégâts au joueur adverse au corps à corps
                         if (camera.position.distanceTo(enemyGroup.position) < 4) {
                             enemyHP -= chosenWeapon.damage;
                             document.getElementById('enemy-hp').style.width = Math.max(0, enemyHP) + '%';
@@ -442,12 +440,11 @@
                             }
                         }
 
-                        // Dégâts aux constructions posées (les casser avec la pioche)
+                        // Casser les structures à la pioche
                         for (let i = customBuilds.length - 1; i >= 0; i--) {
                             let buildObj = customBuilds[i];
                             if (camera.position.distanceTo(buildObj.position) < 5) {
                                 scene.remove(buildObj);
-                                // Retirer des tableaux de collisions/rampes
                                 let idxRamp = ramps.indexOf(buildObj);
                                 if (idxRamp > -1) ramps.splice(idxRamp, 1);
                                 let idxColl = colliders.indexOf(buildObj);
@@ -457,7 +454,6 @@
                             }
                         }
                     } else {
-                        // Tir normal avec les armes à feu
                         let bullet = new THREE.Mesh(bulletGeo, bulletMat);
                         bullet.position.copy(camera.position);
                         let exactDir = new THREE.Vector3();
@@ -471,8 +467,12 @@
                     const wallGeo = new THREE.BoxGeometry(4, 3, 0.4);
                     const wallMatStruct = new THREE.MeshStandardMaterial({ color: 0xa0522d, roughness: 0.7 });
                     const builtWall = new THREE.Mesh(wallGeo, wallMatStruct);
-                    builtWall.position.copy(camera.position).add(dir.clone().multiplyScalar(4));
-                    builtWall.position.y = 1.5;
+                    
+                    let spawnPos = camera.position.clone().add(dir.clone().multiplyScalar(4));
+                    // S'aligne parfaitement à la hauteur des plateformes/sols où l'on se trouve
+                    spawnPos.y = Math.floor(camera.position.y / 2) * 2 + 1.5;
+
+                    builtWall.position.copy(spawnPos);
                     builtWall.rotation.y = camera.rotation.y;
                     scene.add(builtWall);
                     colliders.push(builtWall);
@@ -482,26 +482,28 @@
                     const floorGeo = new THREE.BoxGeometry(4, 0.2, 4);
                     const floorMatStruct = new THREE.MeshStandardMaterial({ color: 0x3498db, roughness: 0.6 });
                     const builtFloor = new THREE.Mesh(floorGeo, floorMatStruct);
-                    builtFloor.position.copy(camera.position).add(dir.clone().multiplyScalar(4));
-                    // Permet d'empiler les sols par rapport à la hauteur actuelle du joueur
-                    builtFloor.position.y = Math.floor(camera.position.y / 2) * 2;
+                    
+                    let spawnPos = camera.position.clone().add(dir.clone().multiplyScalar(4));
+                    // S'aligne et se relie directement à la grille de hauteur du joueur pour marcher dans les airs
+                    spawnPos.y = Math.floor(camera.position.y / 2) * 2;
+                    
+                    builtFloor.position.copy(spawnPos);
                     scene.add(builtFloor);
                     ramps.push(builtFloor);
                     customBuilds.push(builtFloor);
                 }
                 else if (currentBuildMode === 'STAIR') {
-                    // ESCALIERS EMPILABLES : Se posent et s'ajustent en hauteur par rapport à là où se trouve le joueur
                     const stairGeo = new THREE.BoxGeometry(4, 0.2, 4);
                     const stairMatStruct = new THREE.MeshStandardMaterial({ color: 0x2ecc71, roughness: 0.6 });
                     const builtStair = new THREE.Mesh(stairGeo, stairMatStruct);
 
                     let spawnPos = camera.position.clone().add(dir.clone().multiplyScalar(4));
-                    // Ajuste automatiquement la hauteur du nouvel escalier pour pouvoir les enchaîner en hauteur
-                    spawnPos.y = Math.max(1.0, Math.floor(camera.position.y)); 
+                    // Permet de relier et enchaîner les escaliers et les sols en hauteur de manière fluide
+                    spawnPos.y = Math.max(1.0, Math.floor(camera.position.y / 2) * 2); 
                     
                     builtStair.position.copy(spawnPos);
                     builtStair.rotation.y = camera.rotation.y;
-                    builtStair.rotation.x = Math.PI / 5; // Pente pour grimper
+                    builtStair.rotation.x = Math.PI / 5; // Pente d'ascension
 
                     scene.add(builtStair);
                     ramps.push(builtStair);
@@ -543,7 +545,7 @@
                     if (keys['q']) nextPos.addScaledVector(sideDir, speed);
                     if (keys['d']) nextPos.addScaledVector(sideDir, -speed);
 
-                    // GESTION DE LA HAUTEUR SUR LES RAMPES ET ESCALIERS MULTI-NIVEAUX
+                    // GESTION DE LA HAUTEUR SUR LES RAMPES, SOLS ET ESCALIERS CONNECTÉS
                     let targetY = 2; 
                     for (let ramp of ramps) {
                         let box = new THREE.Box3().setFromObject(ramp);
