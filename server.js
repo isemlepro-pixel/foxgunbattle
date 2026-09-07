@@ -1,8 +1,8 @@
 const express = require('express');
-const http = http = require('http');
+const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
-const fs = require('fs'); // Pour sauvegarder les comptes dans un fichier JSON
+const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
@@ -13,7 +13,6 @@ app.use(express.static(path.join(__dirname)));
 
 const USERS_FILE = path.join(__dirname, 'users.json');
 
-// Charger ou initialiser la base de données de comptes
 function getUsers() {
     if (!fs.existsSync(USERS_FILE)) {
         fs.writeFileSync(USERS_FILE, JSON.stringify({}));
@@ -25,7 +24,6 @@ function saveUsers(users) {
     fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
 }
 
-// Routes API pour Connexion / Inscription à la Roblox
 app.post('/api/register', (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) return res.json({ success: false, message: "Champs vides !" });
@@ -51,7 +49,6 @@ app.post('/api/login', (req, res) => {
     res.json({ success: true, username });
 });
 
-// Matchmaking Socket.io existant
 let waitingPlayer = null;
 let activeMatches = {};
 
@@ -59,7 +56,7 @@ io.on('connection', (socket) => {
     console.log(`Joueur connecté : ${socket.id}`);
 
     socket.on('find_match', (data) => {
-        socket.username = data.username || "Invité";
+        socket.username = data && data.username ? data.username : "Invité";
 
         if (waitingPlayer && waitingPlayer.id !== socket.id) {
             let p1 = waitingPlayer;
