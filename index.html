@@ -126,7 +126,7 @@
         </div>
 
         <div style="position: absolute; bottom: 20px; color: white; font-weight: bold; background: rgba(0,0,0,0.7); padding: 10px 20px; border-radius: 5px; z-index: 5;">
-            ZQSD : Bouger | Clic : Action | C : Pioche | F : Mur | G : Sol | V : Escalier (Mode : <span id="build-mode-display" style="color:#e94560;">ARMES / PIOCHE</span>)
+            ZQSD : Bouger | Clic : Action | C : Pioche / Arme | F : Mur | G : Sol | V : Escalier (Mode : <span id="build-mode-display" style="color:#e94560;">ARMES / PIOCHE</span>)
         </div>
     </div>
 
@@ -162,20 +162,27 @@
         let matchmakingTimer;
         let mouseSensitivity = 0.005;
         let chosenWeapon = { id: 'Rifle', name: "Fusil d'Assaut", damage: 20, speed: 0.9 };
+        let lastGunWeapon = { id: 'Rifle', name: "Fusil d'Assaut", damage: 20, speed: 0.9 }; // Mémoire de la dernière arme à feu
         let opponentNameGlobal = "Adversaire";
         let isSettingsOpen = false;
-        let isInGame = false; // Permet de savoir si on est en partie
+        let isInGame = false;
 
         document.getElementById('card-Rifle').classList.add('selected');
 
         function equipWeapon(id, name, damage, speed) {
             chosenWeapon = { id, name, damage, speed };
+            
+            // Si ce n'est pas la pioche, on mémorise cette arme comme étant la dernière arme à feu choisie
+            if (id !== 'Pickaxe') {
+                lastGunWeapon = { id, name, damage, speed };
+            }
+
             document.getElementById('current-weapon-label').innerText = name;
             document.getElementById('player-weapon-name').innerText = name;
             document.querySelectorAll('.weapon-card').forEach(c => c.classList.remove('selected'));
-            document.getElementById('card-' + id).classList.add('selected');
+            let cardElem = document.getElementById('card-' + id);
+            if (cardElem) cardElem.classList.add('selected');
             
-            // Si on est dans le menu principal, on y retourne. Si on est en jeu, on n'y touche pas !
             if (!isInGame) {
                 showScreen('main-menu');
             }
@@ -218,7 +225,7 @@
 
         socket.on('match_found', (data) => {
             opponentNameGlobal = data.opponent;
-            isInGame = true; // On passe en mode jeu actif
+            isInGame = true;
             showScreen('game-screen');
             init3DGame();
         });
@@ -308,7 +315,6 @@
             let botSpeed = 0.035;
             let isGameOver = false;
             let matchStarted = false;
-
             let currentBuildMode = 'WEAPON'; 
 
             camera.position.set(0, 2, 15);
@@ -375,8 +381,12 @@
                 if (!matchStarted || isGameOver || isSettingsOpen) return;
 
                 if (key === 'c') {
-                    // Équipe directement la pioche sans quitter la partie
-                    equipWeapon('Pickaxe', 'Pioche', 35, 1.5);
+                    // Si on a déjà la pioche, on rééquipe l'arme à feu mémorisée. Sinon, on équipe la pioche !
+                    if (chosenWeapon.id === 'Pickaxe') {
+                        equipWeapon(lastGunWeapon.id, lastGunWeapon.name, lastGunWeapon.damage, lastGunWeapon.speed);
+                    } else {
+                        equipWeapon('Pickaxe', 'Pioche', 35, 1.5);
+                    }
                     currentBuildMode = 'WEAPON';
                     updateBuildHUD();
                 } else if (key === 'f') {
@@ -420,7 +430,30 @@
                 }
             }
 
-            // GESTION DU CLIC : INTERCONNEXION DES SOLS, MURS ET ESCALIERS
+            // ANIMATION DE COUP DE PIOCHE / ARME
+            let isAnimatingSwing = false;
+            function triggerSwingAnimation() {
+                if (isAnimatingSwing) return;
+                isAnimatingSwing = true;
+                let startX = playerWeapon.position.x;
+                let startY = playerWeapon.position.y;
+                let startZ = playerWeapon.position.z;
+
+                let progress = 0;
+                let swingInterval = setInterval(() => {
+                    progress += 0.2;
+                    if (progress <= Math.PI) {
+                        // Mouvement de frappe vers l'avant/bas
+                        playerWeapon.position.z = startZ - Math.sin(progress) * 0.6;
+                        playerWeapon.position.y = startY - Math.cos(progress) * 0.3;
+                    } else {
+                        playerWeapon.position.set(startX, startY, startZ);
+                        isAnimatingSwing = false;
+                        clearInterval(swingInterval);
+                    }
+                }, 20);
+            }
+
             window.addEventListener('mousedown', (e) => {
                 if (e.button !== 0 || document.pointerLockElement !== gameScreen || !matchStarted || isGameOver || isSettingsOpen) return;
 
@@ -430,8 +463,10 @@
                 dir.normalize();
 
                 if (currentBuildMode === 'WEAPON') {
+                    // Lancer l'animation de coup à chaque clic
+                    triggerSwingAnimation();
+
                     if (chosenWeapon.id === 'Pickaxe') {
-                        // Dégâts au joueur adverse au corps à corps
                         if (camera.position.distanceTo(enemyGroup.position) < 4) {
                             enemyHP -= chosenWeapon.damage;
                             document.getElementById('enemy-hp').style.width = Math.max(0, enemyHP) + '%';
@@ -448,7 +483,6 @@
                             }
                         }
 
-                        // Casser les structures à la pioche
                         for (let i = customBuilds.length - 1; i >= 0; i--) {
                             let buildObj = customBuilds[i];
                             if (camera.position.distanceTo(buildObj.position) < 5) {
