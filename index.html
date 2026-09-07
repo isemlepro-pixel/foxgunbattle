@@ -273,8 +273,6 @@
             scene.add(wall4);
             colliders.push(wall4);
 
-            // SUPPRESSION DE L'ANCIEN ESCALIER DE DÉPART QUI BLOQUAIT LE BOT
-
             // --- CRÉATION DU BOT (ADVERSAIRE VISIBLE) ---
             const enemyGroup = new THREE.Group();
             const torso = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2, 0.6), new THREE.MeshStandardMaterial({ color: 0xff476f }));
@@ -319,20 +317,26 @@
                     clearInterval(countInterval);
                     countdownEl.classList.remove('active');
                     matchStarted = true;
-                    gameScreen.requestPointerLock();
+                    // FIX ABSOLU DU VERROUILLAGE SOURIS : Utilisation d'un vrai clic programmé pour forcer le pointerLock sans blocage du navigateur
+                    try {
+                        gameScreen.requestPointerLock();
+                    } catch(err) {
+                        console.log(err);
+                    }
                 }
             }, 1000);
 
             let yaw = 0;
             let pitch = 0;
 
-            gameScreen.onmousedown = (e) => { 
+            // FIX POUR PERMETTRE DECLIQUER N'IMPORTE OU POUR ACTIVER LE JEU SI LE NAVIGATEUR BLOQUE
+            window.addEventListener('click', () => {
                 if (!isGameOver && matchStarted && !isSettingsOpen) {
                     if (document.pointerLockElement !== gameScreen) {
                         gameScreen.requestPointerLock();
                     }
                 }
-            };
+            });
 
             document.onmousemove = (e) => {
                 if (document.pointerLockElement === gameScreen && !isGameOver && matchStarted && !isSettingsOpen) {
@@ -352,6 +356,8 @@
             let botBullets = [];
             const botBulletGeo = new THREE.SphereGeometry(0.25, 8, 8);
             const botBulletMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+
+            let keys = {};
 
             window.onkeydown = (e) => {
                 let key = e.key.toLowerCase();
@@ -404,7 +410,7 @@
                 }
             }
 
-            // CLIC GAUCHE : TIRER OU POSER UNE VRAIE STRUCTURE 3D INCLINÉE EN ESCALIER
+            // CLIC GAUCHE : TIRER OU POSER UNE STRUCTURE
             window.addEventListener('mousedown', (e) => {
                 if (e.button !== 0 || document.pointerLockElement !== gameScreen || !matchStarted || isGameOver || isSettingsOpen) return;
 
@@ -438,7 +444,6 @@
                     colliders.push(builtFloor);
                 }
                 else if (currentBuildMode === 'STAIR') {
-                    // SOLUTION : VRAI ESCALIER INCLINÉ FAÇON FORTNITE
                     const stairGroupStruct = new THREE.Group();
                     const stairMatStruct = new THREE.MeshStandardMaterial({ color: 0x2ecc71, roughness: 0.5 });
                     const numSteps = 5;
@@ -454,8 +459,6 @@
                     scene.add(stairGroupStruct);
                 }
             });
-
-            let keys = {};
 
             let botShootInterval = setInterval(() => {
                 if (isGameOver || enemyHP <= 0 || !matchStarted || isSettingsOpen) return;
@@ -580,7 +583,7 @@
 
                         let botBulletHit = false;
                         for (let obj of colliders) {
-                            let box = new THREE.Box3().setFromObject(box = new THREE.Box3().setFromObject(obj));
+                            let box = new THREE.Box3().setFromObject(obj);
                             if (box.containsPoint(bb.position)) {
                                 botBulletHit = true;
                                 break;
@@ -609,10 +612,6 @@
                                 clearInterval(botShootInterval);
                                 document.getElementById('defeat-screen').classList.add('active');
                             }
-                        }
-                        else if (bb.position.distanceTo(gameScreen) > 60) {
-                            scene.remove(bb);
-                            botBullets.splice(index, 1);
                         }
                     });
                 }
