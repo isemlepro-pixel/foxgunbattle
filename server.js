@@ -1,12 +1,13 @@
 const express = require('express');
-const app = express();
-const server = require('http').createServer(app);
-const io = require('socket.io')(server);
+const http = require('http');
+const { Server } = require('socket.io');
 const path = require('path');
 
-// Servir les fichiers statiques (ton index.html doit être à la racine ou dans un dossier public selon ton choix)
-// Si ton index.html est directement à la racine du projet, utilise __dirname tout court :
-app.use(express.static(__dirname));
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
+
+app.use(express.static(path.join(__dirname)));
 
 let waitingPlayers = [];
 
@@ -15,43 +16,31 @@ io.on('connection', (socket) => {
 
     socket.on('find_match', () => {
         console.log(`Recherche de match pour ${socket.id}`);
-        waitingPlayers.push(socket);
+        
+        // Évite de mettre le même joueur plusieurs fois en double
+        if (!waitingPlayers.includes(socket)) {
+            waitingPlayers.push(socket);
+        }
 
+        // Si on a au moins 2 joueurs en attente, on lance le match entre eux
         if (waitingPlayers.length >= 2) {
             let p1 = waitingPlayers.shift();
             let p2 = waitingPlayers.shift();
-            createMatch(p1, p2, false);
-        } else {
-            socket.matchTimeout = setTimeout(() => {
-                let index = waitingPlayers.indexOf(socket);
-                if (index !== -1) {
-                    waitingPlayers.splice(index, 1);
-                    console.log(`Pas de joueur trouvé pour ${socket.id}, ajout d'un bot.`);
-                    createMatch(socket, null, true);
-                }
-            }, 10000); // 10 secondes
+
+            // On envoie l'événement aux deux vrais joueurs
+            p1.emit('match_found', { opponent: "Joueur 2" });
+            p2.emit('match_found', { opponent: "Joueur 1" });
+
+            console.log(`Match lancé entre ${p1.id} et ${p2.id}`);
         }
     });
 
     socket.on('disconnect', () => {
-        let index = waitingPlayers.indexOf(socket);
-        if (index !== -1) {
-            waitingPlayers.splice(index, 1);
-            clearTimeout(socket.matchTimeout);
-        }
-        console.log(`Déconnexion : ${socket.id}`);
+        // Retirer le joueur de la file d'attente s'il se déconnecte
+        waitingPlayers = waitingPlayers.filter(s => s !== socket);
+        console.log(`Joueur déconnecté : ${socket.id}`);
     });
 });
-
-function createMatch(p1, p2, isBot) {
-    if (p1.matchTimeout) clearTimeout(p1.matchTimeout);
-    if (p2 && p2.matchTimeout) clearTimeout(p2.matchTimeout);
-
-    p1.emit('match_found', { opponent: isBot ? 'Bot' : p2.id });
-    if (!isBot && p2) {
-        p2.emit('match_found', { opponent: p1.id });
-    }
-}
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
