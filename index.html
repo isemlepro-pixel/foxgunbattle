@@ -122,7 +122,7 @@
         </div>
 
         <div style="position: absolute; bottom: 20px; color: white; font-weight: bold; background: rgba(0,0,0,0.7); padding: 10px 20px; border-radius: 5px; z-index: 5;">
-            ZQSD : Bouger | Clic : Tirer | F : Construire un mur (Max <span id="wall-count">5</span>)
+            ZQSD : Bouger | Clic : Tirer | F : Mur | G : Sol | V : Escalier (Mode actuel : <span id="build-mode-display" style="color:#e94560;">AUCUN (Arme)</span>)
         </div>
     </div>
 
@@ -232,10 +232,9 @@
             pointLight.position.set(0, 15, 0);
             scene.add(pointLight);
 
-            // Liste globale des obstacles solides (murs d'arène, escalier, murs construits)
             const colliders = [];
 
-            // SOL TEXTURÉ AVEC DES DALLES (Génération d'une grille visible)
+            // SOL TEXTURÉ AVEC DES DALLES
             const floorGroup = new THREE.Group();
             const tileSize = 6;
             for (let x = -30; x < 30; x += tileSize) {
@@ -274,19 +273,19 @@
             scene.add(wall4);
             colliders.push(wall4);
 
-            // ESCALIER FONCTIONNEL (Marches montantes)
+            // Escalier initial
             const stairGroup = new THREE.Group();
             const stepMat = new THREE.MeshStandardMaterial({ color: 0x0f3460, roughness: 0.5 });
             const numSteps = 8;
             for (let i = 0; i < numSteps; i++) {
                 const step = new THREE.Mesh(new THREE.BoxGeometry(5, 0.5 + (i * 0.4), 1.2), stepMat);
-                // Position progressive en hauteur et en profondeur
                 step.position.set(0, (0.5 + (i * 0.4)) / 2, -10 - (i * 1.1));
                 stairGroup.add(step);
                 colliders.push(step);
             }
             scene.add(stairGroup);
 
+            // --- CRÉATION DU BOT (ADVERSAIRE VISIBLE) ---
             const enemyGroup = new THREE.Group();
             const torso = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2, 0.6), new THREE.MeshStandardMaterial({ color: 0xff476f }));
             torso.position.y = 1;
@@ -309,8 +308,9 @@
             let botSpeed = 0.035;
             let isGameOver = false;
             let matchStarted = false;
-            let wallsPlaced = 0;
-            const maxWalls = 5;
+
+            // Système de construction façon Fortnite (F = Mur, G = Sol, V = Escalier, Arme par défaut)
+            let currentBuildMode = 'WEAPON'; // 'WEAPON', 'WALL', 'FLOOR', 'STAIR'
 
             camera.position.set(0, 2, 15);
 
@@ -336,9 +336,12 @@
             let yaw = 0;
             let pitch = 0;
 
-            gameScreen.onclick = (e) => { 
-                if (!isGameOver && matchStarted && !isSettingsOpen && e.target.id === 'game-screen') {
-                    gameScreen.requestPointerLock(); 
+            // VERROUILLAGE DE LA SOURIS CORRIGÉ (clic n'importe où sur l'écran de jeu)
+            gameScreen.onmousedown = (e) => { 
+                if (!isGameOver && matchStarted && !isSettingsOpen) {
+                    if (document.pointerLockElement !== gameScreen) {
+                        gameScreen.requestPointerLock();
+                    }
                 }
             };
 
@@ -361,45 +364,109 @@
             const botBulletGeo = new THREE.SphereGeometry(0.25, 8, 8);
             const botBulletMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
 
-            // TIR DU JOUEUR
-            window.onmousedown = (e) => {
-                if (document.pointerLockElement === gameScreen && e.button === 0 && enemyHP > 0 && !isGameOver && matchStarted && !isSettingsOpen) {
+            // GESTION DES CLICS (TIR OU CONSTRUCTION) ET CHANGEMENT DE MODE (F, G, V)
+            window.onkeydown = (e) => {
+                let key = e.key.toLowerCase();
+                
+                if (key === 'z' || key === 'w') keys['z'] = true;
+                if (key === 's') keys['s'] = true;
+                if (key === 'q' || key === 'a') keys['q'] = true;
+                if (key === 'd') keys['d'] = true;
+
+                if (!matchStarted || isGameOver || isSettingsOpen) return;
+
+                // Sélection des modes de construction façon Fortnite
+                if (key === 'f') {
+                    currentBuildMode = (currentBuildMode === 'WALL') ? 'WEAPON' : 'WALL';
+                    updateBuildHUD();
+                } else if (key === 'g') {
+                    currentBuildMode = (currentBuildMode === 'FLOOR') ? 'WEAPON' : 'FLOOR';
+                    updateBuildHUD();
+                } else if (key === 'v') {
+                    currentBuildMode = (currentBuildMode === 'STAIR') ? 'WEAPON' : 'STAIR';
+                    updateBuildHUD();
+                }
+            };
+
+            window.onkeyup = (e) => {
+                let key = e.key.toLowerCase();
+                if (key === 'z' || key === 'w') keys['z'] = false;
+                if (key === 's') keys['s'] = false;
+                if (key === 'q' || key === 'a') keys['q'] = false;
+                if (key === 'd') keys['d'] = false;
+            };
+
+            function updateBuildHUD() {
+                let display = document.getElementById('build-mode-display');
+                if (currentBuildMode === 'WEAPON') {
+                    display.innerText = "AUCUN (Arme)";
+                    display.style.color = "#e94560";
+                    playerWeapon.visible = true;
+                } else if (currentBuildMode === 'WALL') {
+                    display.innerText = "MUR (F)";
+                    display.style.color = "#a0522d";
+                    playerWeapon.visible = false;
+                } else if (currentBuildMode === 'FLOOR') {
+                    display.innerText = "SOL (G)";
+                    display.style.color = "#3498db";
+                    playerWeapon.visible = false;
+                } else if (currentBuildMode === 'STAIR') {
+                    display.innerText = "ESCALIER (V)";
+                    display.style.color = "#2ecc71";
+                    playerWeapon.visible = false;
+                }
+            }
+
+            // CLIC GAUCHE : TIRER OU POSER UNE STRUCTURE
+            window.addEventListener('mousedown', (e) => {
+                if (e.button !== 0 || document.pointerLockElement !== gameScreen || !matchStarted || isGameOver || isSettingsOpen) return;
+
+                let dir = new THREE.Vector3();
+                camera.getWorldDirection(dir);
+
+                if (currentBuildMode === 'WEAPON') {
+                    // Tirer
                     let bullet = new THREE.Mesh(bulletGeo, bulletMat);
                     bullet.position.copy(camera.position);
-                    let dir = new THREE.Vector3();
-                    camera.getWorldDirection(dir);
-                    bullet.velocity = dir.multiplyScalar(chosenWeapon.speed);
+                    bullet.velocity = dir.clone().multiplyScalar(chosenWeapon.speed);
                     scene.add(bullet);
                     bullets.push(bullet);
+                } 
+                else if (currentBuildMode === 'WALL') {
+                    // Poser un mur
+                    const wallGeo = new THREE.BoxGeometry(4, 3, 0.4);
+                    const wallMatStruct = new THREE.MeshStandardMaterial({ color: 0xa0522d, roughness: 0.7 });
+                    const builtWall = new THREE.Mesh(wallGeo, wallMatStruct);
+                    builtWall.position.copy(camera.position).add(dir.clone().multiplyScalar(4));
+                    builtWall.position.y = 1.5;
+                    builtWall.rotation.y = camera.rotation.y;
+                    scene.add(builtWall);
+                    colliders.push(builtWall);
                 }
-            };
+                else if (currentBuildMode === 'FLOOR') {
+                    // Poser un sol plat
+                    const floorGeo = new THREE.BoxGeometry(4, 0.2, 4);
+                    const floorMatStruct = new THREE.MeshStandardMaterial({ color: 0x3498db, roughness: 0.6 });
+                    const builtFloor = new THREE.Mesh(floorGeo, floorMatStruct);
+                    builtFloor.position.copy(camera.position).add(dir.clone().multiplyScalar(3));
+                    builtFloor.position.y = 0.1;
+                    scene.add(builtFloor);
+                    colliders.push(builtFloor);
+                }
+                else if (currentBuildMode === 'STAIR') {
+                    // Poser un escalier
+                    const stairGeo = new THREE.BoxGeometry(4, 1.5, 3);
+                    const stairMatStruct = new THREE.MeshStandardMaterial({ color: 0x2ecc71, roughness: 0.5 });
+                    const builtStair = new THREE.Mesh(stairGeo, stairMatStruct);
+                    builtStair.position.copy(camera.position).add(dir.clone().multiplyScalar(3));
+                    builtStair.position.y = 0.75;
+                    builtStair.rotation.y = camera.rotation.y;
+                    scene.add(builtStair);
+                    colliders.push(builtStair);
+                }
+            });
 
             let keys = {};
-            window.onkeydown = (e) => {
-                keys[e.key.toLowerCase()] = true;
-
-                // CONSTRUCTION DE MUR (Touche F) AVEC AJOUT DANS LES COLLIDERS
-                if (e.key.toLowerCase() === 'f' && matchStarted && !isGameOver && !isSettingsOpen) {
-                    if (wallsPlaced < maxWalls) {
-                        const wallGeo = new THREE.BoxGeometry(4, 3, 0.4);
-                        const wallMatStruct = new THREE.MeshStandardMaterial({ color: 0xa0522d, roughness: 0.7 });
-                        const builtWall = new THREE.Mesh(wallGeo, wallMatStruct);
-
-                        let dir = new THREE.Vector3();
-                        camera.getWorldDirection(dir);
-                        builtWall.position.copy(camera.position).add(dir.multiplyScalar(4));
-                        builtWall.position.y = 1.5;
-                        builtWall.rotation.y = camera.rotation.y;
-
-                        scene.add(builtWall);
-                        colliders.push(builtWall); // Empêche le joueur, le bot et les tirs de traverser
-
-                        wallsPlaced++;
-                        document.getElementById('wall-count').innerText = maxWalls - wallsPlaced;
-                    }
-                }
-            };
-            window.onkeyup = (e) => keys[e.key.toLowerCase()] = false;
 
             let botShootInterval = setInterval(() => {
                 if (isGameOver || enemyHP <= 0 || !matchStarted || isSettingsOpen) return;
@@ -430,16 +497,16 @@
                     let sideDir = new THREE.Vector3(dir.z, 0, -dir.x);
 
                     let nextPos = camera.position.clone();
-                    if (keys['z'] || keys['w']) nextPos.addScaledVector(dir, speed);
+                    if (keys['z']) nextPos.addScaledVector(dir, speed);
                     if (keys['s']) nextPos.addScaledVector(dir, -speed);
-                    if (keys['q'] || keys['a']) nextPos.addScaledVector(sideDir, speed);
+                    if (keys['q']) nextPos.addScaledVector(sideDir, speed);
                     if (keys['d']) nextPos.addScaledVector(sideDir, -speed);
 
-                    // COLLISION JOUEUR AVEC TOUS LES OBSTACLES (Y COMPRIS LES MURS CONSTRUITS)
+                    // COLLISION JOUEUR
                     let canMove = true;
                     for (let obj of colliders) {
                         let box = new THREE.Box3().setFromObject(obj);
-                        box.expandByScalar(0.5); // Marge de collision
+                        box.expandByScalar(0.5);
                         if (box.containsPoint(nextPos)) {
                             canMove = false;
                             break;
@@ -453,7 +520,7 @@
                     camera.position.x = Math.max(-28, Math.min(28, camera.position.x));
                     camera.position.z = Math.max(-28, Math.min(28, camera.position.z));
 
-                    // DÉPLACEMENT DU BOT AVEC GESTION DE COLLISION ANTI-TRAVERSÉE DE MUR
+                    // DÉPLACEMENT DU BOT AVEC COLLISION ANTI-TRAVERSÉE
                     if (enemyHP > 0) {
                         let botDir = new THREE.Vector3().subVectors(camera.position, enemyGroup.position);
                         botDir.y = 0;
@@ -477,7 +544,7 @@
                         enemyGroup.lookAt(camera.position.x, enemyGroup.position.y, camera.position.z);
                     }
 
-                    // GESTION DES TIRS DU JOUEUR (Bloqués par les murs et obstacles)
+                    // TIRS JOUEUR
                     bullets.forEach((b, index) => {
                         b.position.add(b.velocity);
 
@@ -522,7 +589,7 @@
                         }
                     });
 
-                    // GESTION DES TIRS DU BOT (Bloqués par les murs construits)
+                    // TIRS DU BOT
                     botBullets.forEach((bb, index) => {
                         bb.position.add(bb.velocity);
 
@@ -558,7 +625,7 @@
                                 document.getElementById('defeat-screen').classList.add('active');
                             }
                         }
-                        else if (bb.position.distanceTo(camera.position) > 60) {
+                        else if (bb.position.distanceTo(gameScreen) > 60) {
                             scene.remove(bb);
                             botBullets.splice(index, 1);
                         }
