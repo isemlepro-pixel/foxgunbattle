@@ -55,12 +55,14 @@ app.post('/api/login', (req, res) => {
 
 let waitingPlayer = null;
 let activeMatches = {};
+let playerHps = {}; // Suit les PV des joueurs en direct
 
 io.on('connection', (socket) => {
     console.log(`Joueur connecté : ${socket.id}`);
 
     socket.on('find_match', (data) => {
         socket.username = data && data.username ? data.username : "Invité";
+        playerHps[socket.id] = 100;
 
         if (waitingPlayer && waitingPlayer.id !== socket.id) {
             let p1 = waitingPlayer;
@@ -87,9 +89,36 @@ io.on('connection', (socket) => {
         if (roomId) socket.to(roomId).emit('opponent_move', data);
     });
 
+    socket.on('player_shoot', (data) => {
+        let roomId = activeMatches[socket.id];
+        if (roomId) socket.to(roomId).emit('opponent_shoot', data);
+    });
+
     socket.on('player_attack', (data) => {
         let roomId = activeMatches[socket.id];
-        if (roomId) socket.to(roomId).emit('take_damage', data);
+        if (roomId) {
+            // Trouve l'adversaire dans la même room
+            let socketsInRoom = io.sockets.adapter.rooms.get(roomId);
+            if (socketsInRoom) {
+                for (let socketId of socketsInRoom) {
+                    if (socketId !== socket.id) {
+                        // Inflige les dégâts à l'adversaire
+                        playerHps[socketId] = (playerHps[socketId] || 100) - data.damage;
+                        let currentHp = playerHps[socketId];
+
+                        // Envoie ses nouveaux PV à l'adversaire
+                        io.to(socketId).emit('take_damage', { damage: data.damage });
+                        // Informe le tireur de l'impact et des PV restants de l'ennemi
+                        socket.emit('hit_confirmed', { remainingHp: currentHp });
+
+                        if (currentHp <= 0) {
+                            socket.emit('match_won');
+                            io.to(socketId).emit('match_lost');
+                        }
+                    }
+                }
+            }
+        }
     });
 
     socket.on('disconnect', () => {
@@ -99,6 +128,7 @@ io.on('connection', (socket) => {
             io.to(roomId).emit('opponent_disconnected');
             delete activeMatches[socket.id];
         }
+        delete playerHps[socket.id];
     });
 });
 
