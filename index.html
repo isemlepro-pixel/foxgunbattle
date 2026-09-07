@@ -148,8 +148,9 @@
             </div>
         </div>
 
-        <div style="position: absolute; bottom: 20px; color: white; font-weight: bold; background: rgba(0,0,0,0.7); padding: 10px 20px; border-radius: 5px; z-index: 5;">
-            ZQSD : Bouger | ESPACE : Sauter | Clic : Action | C : Pioche / Arme | F : Mur | G : Sol | V : Escalier
+        <div style="position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); color: white; font-weight: bold; background: rgba(0,0,0,0.8); padding: 10px 20px; border-radius: 5px; z-index: 5; text-align: center;">
+            <div id="build-mode-display" style="color: #e94560; margin-bottom: 4px;">FUSIL D'ASSAUT (Arme/Outil)</div>
+            ZQSD : Bouger | ESPACE : Sauter | Clic : Action | C : Pioche/Arme | F : Mur | G : Sol | V : Escalier
         </div>
     </div>
 
@@ -433,11 +434,10 @@
             let matchStarted = false;
             let currentBuildMode = 'WEAPON'; 
 
-            // Physique et Saut
             let velocityY = 0;
             let isGrounded = true;
-            const gravity = -0.015;
-            const jumpForce = 0.3;
+            const gravity = -0.012;
+            const jumpForce = 0.25;
 
             let countdownEl = document.getElementById('countdown-overlay');
             countdownEl.classList.add('active');
@@ -592,7 +592,7 @@
 
                 let dir = new THREE.Vector3();
                 camera.getWorldDirection(dir);
-                dir.y = 0; 
+                dir.y = 0; // Bloque totalement l'axe vertical pour éviter que le spawn parte en l'air
                 dir.normalize();
 
                 if (currentBuildMode === 'WEAPON') {
@@ -620,29 +620,28 @@
                     }
                 } 
                 else {
-                    // Placement propre fixé bien droit devant le joueur (indépendant de la hauteur de la caméra)
-                    let spawnPos = camera.position.clone().add(dir.clone().multiplyScalar(4));
-                    spawnPos.y = 1.5; // Hauteur fixe au sol pour éviter que ça pop en l'air
+                    // Placement pile devant le joueur au niveau du sol
+                    let spawnPos = camera.position.clone().add(dir.clone().multiplyScalar(3.5));
+                    spawnPos.y = 1.5; // Hauteur de base fixe pour le sol/escalier
 
                     if (currentBuildMode === 'WALL') {
-                        const builtWall = new THREE.Mesh(new THREE.BoxGeometry(4, 3, 0.5), new THREE.MeshStandardMaterial({ map: fortniteWoodTex, roughness: 0.5 }));
-                        builtWall.position.copy(spawnPos);
+                        const builtWall = new THREE.Mesh(new THREE.BoxGeometry(4, 3, 0.4), new THREE.MeshStandardMaterial({ map: fortniteWoodTex, roughness: 0.5 }));
+                        builtWall.position.set(spawnPos.x, 1.5, spawnPos.z);
                         builtWall.rotation.y = camera.rotation.y;
                         scene.add(builtWall);
                         colliders.push(builtWall);
                     }
                     else if (currentBuildMode === 'FLOOR') {
-                        const builtFloor = new THREE.Mesh(new THREE.BoxGeometry(4, 0.3, 4), new THREE.MeshStandardMaterial({ map: fortniteWoodTex, roughness: 0.5 }));
-                        builtFloor.position.set(spawnPos.x, 3.0, spawnPos.z); // Se pose en hauteur pour créer des étages
+                        const builtFloor = new THREE.Mesh(new THREE.BoxGeometry(4, 0.2, 4), new THREE.MeshStandardMaterial({ map: fortniteWoodTex, roughness: 0.5 }));
+                        builtFloor.position.set(spawnPos.x, 3.0, spawnPos.z);
                         scene.add(builtFloor);
                         colliders.push(builtFloor);
                     }
                     else if (currentBuildMode === 'STAIR') {
-                        // Escalier droit et inclinable de manière propre pour pouvoir le gravir
-                        const builtStair = new THREE.Mesh(new THREE.BoxGeometry(4, 0.3, 4), new THREE.MeshStandardMaterial({ map: fortniteWoodTex, roughness: 0.5 }));
-                        builtStair.position.set(spawnPos.x, 1.5, spawnPos.z);
+                        const builtStair = new THREE.Mesh(new THREE.BoxGeometry(4, 0.2, 4), new THREE.MeshStandardMaterial({ map: fortniteWoodTex, roughness: 0.5 }));
+                        builtStair.position.set(spawnPos.x, 2.0, spawnPos.z);
                         builtStair.rotation.y = camera.rotation.y;
-                        builtStair.rotation.x = Math.PI / 6; // Angle parfait de rampe
+                        builtStair.rotation.x = Math.PI / 4; // Rampe inclinée praticable
                         scene.add(builtStair);
                         colliders.push(builtStair);
                     }
@@ -667,7 +666,7 @@
                 let delta = clock.getDelta();
                 if (delta > 0.1) delta = 0.1;
 
-                let moveSpeed = 8 * delta;
+                let moveSpeed = 7 * delta;
                 let dir = new THREE.Vector3();
                 camera.getWorldDirection(dir);
                 dir.y = 0;
@@ -681,31 +680,33 @@
                 if (keys['q']) nextPos.add(sideDir.clone().multiplyScalar(moveSpeed));
                 if (keys['d']) nextPos.add(sideDir.clone().multiplyScalar(-moveSpeed));
 
-                // Gravité et Saut
                 velocityY += gravity;
                 nextPos.y += velocityY;
 
-                // Sol de base
-                if (nextPos.y <= 2.0) {
-                    nextPos.y = 2.0;
+                // Sol par défaut
+                let groundLevel = 2.0;
+                isGrounded = false;
+
+                // Détection intelligente pour marcher sur les sols et les escaliers sans rester bloqué
+                for (let c of colliders) {
+                    let distanceXZ = Math.hypot(nextPos.x - c.position.x, nextPos.z - c.position.z);
+                    if (distanceXZ < 2.2) {
+                        // Si on est au-dessus ou proche de la hauteur de l'objet, on ajuste le sol pour pouvoir monter dessus
+                        if (nextPos.y >= c.position.y - 0.5 && nextPos.y <= c.position.y + 2.0) {
+                            if (c.position.y + 1.0 > groundLevel) {
+                                groundLevel = c.position.y + 1.0;
+                            }
+                        }
+                    }
+                }
+
+                if (nextPos.y <= groundLevel) {
+                    nextPos.y = groundLevel;
                     velocityY = 0;
                     isGrounded = true;
                 }
 
-                // Collisions strictes avec les murs et constructions
-                let canMove = true;
-                for (let c of colliders) {
-                    if (nextPos.distanceTo(c.position) < 2.0) {
-                        canMove = false;
-                        break;
-                    }
-                }
-
-                if (canMove) {
-                    camera.position.copy(nextPos);
-                } else {
-                    velocityY = 0;
-                }
+                camera.position.copy(nextPos);
 
                 for (let i = bullets.length - 1; i >= 0; i--) {
                     let bObj = bullets[i];
