@@ -408,7 +408,7 @@
                 }
             }
 
-            // GESTION DU CLIC POUR POSER LES STRUCTURES ET LES COLLIDERS ASSOCIÉS
+            // GESTION DU CLIC POUR POSER LES STRUCTURES ET LEUR COLLIDER CORRIGÉ
             window.addEventListener('mousedown', (e) => {
                 if (e.button !== 0 || document.pointerLockElement !== gameScreen || !matchStarted || isGameOver || isSettingsOpen) return;
 
@@ -442,7 +442,7 @@
                     colliders.push(builtFloor);
                 }
                 else if (currentBuildMode === 'STAIR') {
-                    // Groupe visuel de l'escalier ( rampe bois texturée comme sur l'image )
+                    // Escalier visuel type Fortnite
                     const stairGroupStruct = new THREE.Group();
                     
                     const rampMat = new THREE.MeshStandardMaterial({ color: 0xa0522d, roughness: 0.6 });
@@ -464,13 +464,13 @@
                     stairGroupStruct.rotation.y = camera.rotation.y;
                     scene.add(stairGroupStruct);
 
-                    // AJOUT D'UN COLLIDER INCLINÉ SÉCURISÉ POUR BLOQUER LES BALLES ET PERMETTRE DE MONTER SANS SE BLOQUER
+                    // COLLIDER CORRIGÉ : Plus petit et affiné pour bloquer les tirs sans bloquer les déplacements du joueur
                     const colliderBox = new THREE.Mesh(
-                        new THREE.BoxGeometry(4, 2.5, 4),
-                        new THREE.MeshBasicMaterial({ visible: false }) // Invisible pour le joueur mais bloque les tirs et sert de repère de collision
+                        new THREE.BoxGeometry(3.5, 1.0, 3.5),
+                        new THREE.MeshBasicMaterial({ visible: false })
                     );
                     colliderBox.position.copy(spawnPos);
-                    colliderBox.position.y = 1.0;
+                    colliderBox.position.y = 0.5; // Abaissé pour éviter de bloquer la vue ou les mouvements latéraux
                     colliderBox.rotation.y = camera.rotation.y;
                     scene.add(colliderBox);
                     colliders.push(colliderBox);
@@ -514,7 +514,7 @@
                     let canMove = true;
                     for (let obj of colliders) {
                         let box = new THREE.Box3().setFromObject(obj);
-                        box.expandByScalar(0.2);
+                        box.expandByScalar(0.1);
                         if (box.containsPoint(nextPos)) {
                             canMove = false;
                             break;
@@ -538,7 +538,7 @@
 
                         for (let obj of colliders) {
                             let box = new THREE.Box3().setFromObject(obj);
-                            box.expandByScalar(0.4);
+                            box.expandByScalar(0.2);
                             if (box.containsPoint(nextBotPos)) {
                                 botCanMove = false;
                                 break;
