@@ -164,6 +164,7 @@
         let chosenWeapon = { id: 'Rifle', name: "Fusil d'Assaut", damage: 20, speed: 0.9 };
         let opponentNameGlobal = "Adversaire";
         let isSettingsOpen = false;
+        let isInGame = false; // Permet de savoir si on est en partie
 
         document.getElementById('card-Rifle').classList.add('selected');
 
@@ -173,7 +174,11 @@
             document.getElementById('player-weapon-name').innerText = name;
             document.querySelectorAll('.weapon-card').forEach(c => c.classList.remove('selected'));
             document.getElementById('card-' + id).classList.add('selected');
-            showScreen('main-menu');
+            
+            // Si on est dans le menu principal, on y retourne. Si on est en jeu, on n'y touche pas !
+            if (!isInGame) {
+                showScreen('main-menu');
+            }
         }
 
         function updateSensitivity(val) {
@@ -213,6 +218,7 @@
 
         socket.on('match_found', (data) => {
             opponentNameGlobal = data.opponent;
+            isInGame = true; // On passe en mode jeu actif
             showScreen('game-screen');
             init3DGame();
         });
@@ -369,6 +375,7 @@
                 if (!matchStarted || isGameOver || isSettingsOpen) return;
 
                 if (key === 'c') {
+                    // Équipe directement la pioche sans quitter la partie
                     equipWeapon('Pickaxe', 'Pioche', 35, 1.5);
                     currentBuildMode = 'WEAPON';
                     updateBuildHUD();
@@ -433,6 +440,7 @@
 
                             if (enemyHP <= 0) {
                                 isGameOver = true;
+                                isInGame = false;
                                 clearInterval(botShootInterval);
                                 scene.remove(enemyGroup);
                                 document.exitPointerLock();
@@ -469,7 +477,6 @@
                     const builtWall = new THREE.Mesh(wallGeo, wallMatStruct);
                     
                     let spawnPos = camera.position.clone().add(dir.clone().multiplyScalar(4));
-                    // S'aligne parfaitement à la hauteur des plateformes/sols où l'on se trouve
                     spawnPos.y = Math.floor(camera.position.y / 2) * 2 + 1.5;
 
                     builtWall.position.copy(spawnPos);
@@ -484,7 +491,6 @@
                     const builtFloor = new THREE.Mesh(floorGeo, floorMatStruct);
                     
                     let spawnPos = camera.position.clone().add(dir.clone().multiplyScalar(4));
-                    // S'aligne et se relie directement à la grille de hauteur du joueur pour marcher dans les airs
                     spawnPos.y = Math.floor(camera.position.y / 2) * 2;
                     
                     builtFloor.position.copy(spawnPos);
@@ -498,12 +504,11 @@
                     const builtStair = new THREE.Mesh(stairGeo, stairMatStruct);
 
                     let spawnPos = camera.position.clone().add(dir.clone().multiplyScalar(4));
-                    // Permet de relier et enchaîner les escaliers et les sols en hauteur de manière fluide
                     spawnPos.y = Math.max(1.0, Math.floor(camera.position.y / 2) * 2); 
                     
                     builtStair.position.copy(spawnPos);
                     builtStair.rotation.y = camera.rotation.y;
-                    builtStair.rotation.x = Math.PI / 5; // Pente d'ascension
+                    builtStair.rotation.x = Math.PI / 5; 
 
                     scene.add(builtStair);
                     ramps.push(builtStair);
@@ -545,7 +550,6 @@
                     if (keys['q']) nextPos.addScaledVector(sideDir, speed);
                     if (keys['d']) nextPos.addScaledVector(sideDir, -speed);
 
-                    // GESTION DE LA HAUTEUR SUR LES RAMPES, SOLS ET ESCALIERS CONNECTÉS
                     let targetY = 2; 
                     for (let ramp of ramps) {
                         let box = new THREE.Box3().setFromObject(ramp);
@@ -629,6 +633,7 @@
 
                             if (enemyHP <= 0) {
                                 isGameOver = true;
+                                isInGame = false;
                                 clearInterval(botShootInterval);
                                 scene.remove(enemyGroup);
                                 document.exitPointerLock();
@@ -671,6 +676,7 @@
 
                             if (playerHP <= 0) {
                                 isGameOver = true;
+                                isInGame = false;
                                 document.exitPointerLock();
                                 clearInterval(botShootInterval);
                                 document.getElementById('defeat-screen').classList.add('active');
