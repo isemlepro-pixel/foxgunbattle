@@ -408,17 +408,21 @@
                 }
             }
 
-            // GESTION DU CLIC POUR POSER LES STRUCTURES ET LEUR COLLIDER CORRIGÉ
+            // GESTION DU CLIC POUR POSER LES STRUCTURES À BONNE DISTANCE (DISTANCE ÉLOIGNÉE)
             window.addEventListener('mousedown', (e) => {
                 if (e.button !== 0 || document.pointerLockElement !== gameScreen || !matchStarted || isGameOver || isSettingsOpen) return;
 
                 let dir = new THREE.Vector3();
                 camera.getWorldDirection(dir);
+                dir.y = 0; // On garde à plat pour le placement horizontal
+                dir.normalize();
 
                 if (currentBuildMode === 'WEAPON') {
                     let bullet = new THREE.Mesh(bulletGeo, bulletMat);
                     bullet.position.copy(camera.position);
-                    bullet.velocity = dir.clone().multiplyScalar(chosenWeapon.speed);
+                    let exactDir = new THREE.Vector3();
+                    camera.getWorldDirection(exactDir);
+                    bullet.velocity = exactDir.clone().multiplyScalar(chosenWeapon.speed);
                     scene.add(bullet);
                     bullets.push(bullet);
                 } 
@@ -426,7 +430,8 @@
                     const wallGeo = new THREE.BoxGeometry(4, 3, 0.4);
                     const wallMatStruct = new THREE.MeshStandardMaterial({ color: 0xa0522d, roughness: 0.7 });
                     const builtWall = new THREE.Mesh(wallGeo, wallMatStruct);
-                    builtWall.position.copy(camera.position).add(dir.clone().multiplyScalar(4));
+                    // Éloigné à 5 unités devant le joueur pour ne jamais le coller
+                    builtWall.position.copy(camera.position).add(dir.clone().multiplyScalar(5));
                     builtWall.position.y = 1.5;
                     builtWall.rotation.y = camera.rotation.y;
                     scene.add(builtWall);
@@ -436,7 +441,7 @@
                     const floorGeo = new THREE.BoxGeometry(4, 0.2, 4);
                     const floorMatStruct = new THREE.MeshStandardMaterial({ color: 0x3498db, roughness: 0.6 });
                     const builtFloor = new THREE.Mesh(floorGeo, floorMatStruct);
-                    builtFloor.position.copy(camera.position).add(dir.clone().multiplyScalar(3));
+                    builtFloor.position.copy(camera.position).add(dir.clone().multiplyScalar(5));
                     builtFloor.position.y = 0.1;
                     scene.add(builtFloor);
                     colliders.push(builtFloor);
@@ -458,22 +463,23 @@
                         stairGroupStruct.add(plank);
                     }
 
-                    let spawnPos = camera.position.clone().add(dir.clone().multiplyScalar(3));
+                    // Éloigné de 5 unités devant pour éviter qu'il n'apparaisse sur le joueur
+                    let spawnPos = camera.position.clone().add(dir.clone().multiplyScalar(5));
                     spawnPos.y = 0;
                     stairGroupStruct.position.copy(spawnPos);
                     stairGroupStruct.rotation.y = camera.rotation.y;
                     scene.add(stairGroupStruct);
 
-                    // COLLIDER CORRIGÉ : Plus petit et affiné pour bloquer les tirs sans bloquer les déplacements du joueur
-                    const colliderBox = new THREE.Mesh(
-                        new THREE.BoxGeometry(3.5, 1.0, 3.5),
+                    // COLLIDER SOLIDE ET INCLINÉ POUR L'ESCALIER : Bloque les tirs et permet de monter dessus sans traverser
+                    const stairCollider = new THREE.Mesh(
+                        new THREE.BoxGeometry(3.8, 1.8, 3.8),
                         new THREE.MeshBasicMaterial({ visible: false })
                     );
-                    colliderBox.position.copy(spawnPos);
-                    colliderBox.position.y = 0.5; // Abaissé pour éviter de bloquer la vue ou les mouvements latéraux
-                    colliderBox.rotation.y = camera.rotation.y;
-                    scene.add(colliderBox);
-                    colliders.push(colliderBox);
+                    stairCollider.position.copy(spawnPos);
+                    stairCollider.position.y = 0.9; // Position ajustée pour couvrir toute la hauteur de la rampe
+                    stairCollider.rotation.y = camera.rotation.y;
+                    scene.add(stairCollider);
+                    colliders.push(stairCollider);
                 }
             });
 
