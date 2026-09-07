@@ -122,7 +122,7 @@
         </div>
 
         <div style="position: absolute; bottom: 20px; color: white; font-weight: bold; background: rgba(0,0,0,0.7); padding: 10px 20px; border-radius: 5px; z-index: 5;">
-            Clique pour capturer la souris | ZQSD : Bouger | Clic Gauche : Tirer | F : Construire un mur
+            ZQSD : Bouger | Clic : Tirer | F : Construire un mur (Max <span id="wall-count">5</span>)
         </div>
     </div>
 
@@ -232,22 +232,49 @@
             pointLight.position.set(0, 15, 0);
             scene.add(pointLight);
 
-            // Sol texturé/stylé
+            // Liste des objets solides pour les collisions (joueur et tirs)
+            const colliders = [];
+
+            // Sol structuré et coloré
             const floor = new THREE.Mesh(
                 new THREE.PlaneGeometry(60, 60),
-                new THREE.MeshStandardMaterial({ color: 0x1b1b2f, roughness: 0.9 })
+                new THREE.MeshStandardMaterial({ color: 0x16213e, roughness: 0.9 })
             );
             floor.rotation.x = -Math.PI / 2;
             scene.add(floor);
 
-            // Murs de l'arène
+            // Murs de l'arène (Ajoutés aux colliders)
             const wallMat = new THREE.MeshStandardMaterial({ color: 0xe94560 });
             const wall1 = new THREE.Mesh(new THREE.BoxGeometry(60, 6, 1), wallMat);
             wall1.position.set(0, 3, -30);
             scene.add(wall1);
+            colliders.push(wall1);
+
             const wall2 = new THREE.Mesh(new THREE.BoxGeometry(60, 6, 1), wallMat);
             wall2.position.set(0, 3, 30);
             scene.add(wall2);
+            colliders.push(wall2);
+
+            const wall3 = new THREE.Mesh(new THREE.BoxGeometry(1, 6, 60), wallMat);
+            wall3.position.set(-30, 3, 0);
+            scene.add(wall3);
+            colliders.push(wall3);
+
+            const wall4 = new THREE.Mesh(new THREE.BoxGeometry(1, 6, 60), wallMat);
+            wall4.position.set(30, 3, 0);
+            scene.add(wall4);
+            colliders.push(wall4);
+
+            // ESCALIER INTERACTIF
+            const stairGroup = new THREE.Group();
+            const stepMat = new THREE.MeshStandardMaterial({ color: 0x0f3460 });
+            for (let i = 0; i < 6; i++) {
+                const step = new THREE.Mesh(new THREE.BoxGeometry(4, 0.4 + (i * 0.3), 1), stepMat);
+                step.position.set(15, (0.4 + (i * 0.3)) / 2, -10 - (i * 0.9));
+                stairGroup.add(step);
+                colliders.push(step);
+            }
+            scene.add(stairGroup);
 
             function createTree(x, z) {
                 const trunk = new THREE.Mesh(new THREE.BoxGeometry(0.8, 3, 0.8), new THREE.MeshStandardMaterial({ color: 0x8B4513 }));
@@ -258,23 +285,9 @@
                 scene.add(leaves);
             }
 
-            function createCar(x, z, colorHex) {
-                const carGroup = new THREE.Group();
-                const body = new THREE.Mesh(new THREE.BoxGeometry(2.5, 1.2, 5), new THREE.MeshStandardMaterial({ color: colorHex }));
-                body.position.y = 0.8;
-                carGroup.add(body);
-                const cabin = new THREE.Mesh(new THREE.BoxGeometry(2, 1, 2.5), new THREE.MeshStandardMaterial({ color: 0x333333 }));
-                cabin.position.set(0, 1.7, -0.2);
-                carGroup.add(cabin);
-                carGroup.position.set(x, 0, z);
-                scene.add(carGroup);
-            }
-
             createTree(-22, -10);
             createTree(-20, 12);
             createTree(22, 5);
-            createCar(-18, -5, 0x3498db);
-            createCar(18, 15, 0xe74c3c);
 
             const enemyGroup = new THREE.Group();
             const torso = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2, 0.6), new THREE.MeshStandardMaterial({ color: 0xff476f }));
@@ -298,6 +311,8 @@
             let botSpeed = 0.04;
             let isGameOver = false;
             let matchStarted = false;
+            let wallsPlaced = 0;
+            const maxWalls = 5;
 
             camera.position.set(0, 2, 15);
 
@@ -348,7 +363,7 @@
             const botBulletGeo = new THREE.SphereGeometry(0.25, 8, 8);
             const botBulletMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
 
-            // SYSTÈME DE TIR ET CONSTRUCTION DE MUR (Touche F)
+            // SYSTÈMES DE TIR AVEC GESTION DES OBSTACLES (COLLISIONS BALLES)
             window.onmousedown = (e) => {
                 if (document.pointerLockElement === gameScreen && e.button === 0 && enemyHP > 0 && !isGameOver && matchStarted && !isSettingsOpen) {
                     let bullet = new THREE.Mesh(bulletGeo, bulletMat);
@@ -365,22 +380,25 @@
             window.onkeydown = (e) => {
                 keys[e.key.toLowerCase()] = true;
 
-                // Construction de mur en fonction de la position et de l'orientation de la caméra (Touche F)
+                // Construction de mur limitée avec vérification
                 if (e.key.toLowerCase() === 'f' && matchStarted && !isGameOver && !isSettingsOpen) {
-                    const wallGeo = new THREE.BoxGeometry(4, 3, 0.4);
-                    const wallMatStruct = new THREE.MeshStandardMaterial({ color: 0xa0522d, roughness: 0.7 });
-                    const builtWall = new THREE.Mesh(wallGeo, wallMatStruct);
+                    if (wallsPlaced < maxWalls) {
+                        const wallGeo = new THREE.BoxGeometry(4, 3, 0.4);
+                        const wallMatStruct = new THREE.MeshStandardMaterial({ color: 0xa0522d, roughness: 0.7 });
+                        const builtWall = new THREE.Mesh(wallGeo, wallMatStruct);
 
-                    // Calculer la position devant la caméra selon son orientation exacte
-                    let dir = new THREE.Vector3();
-                    camera.getWorldDirection(dir);
-                    builtWall.position.copy(camera.position).add(dir.multiplyScalar(5)); // Se place à 5 unités devant
-                    builtWall.position.y = 1.5; // Hauteur du sol
+                        let dir = new THREE.Vector3();
+                        camera.getWorldDirection(dir);
+                        builtWall.position.copy(camera.position).add(dir.multiplyScalar(4));
+                        builtWall.position.y = 1.5;
+                        builtWall.rotation.y = camera.rotation.y;
 
-                    // Aligner le mur perpendiculairement au regard du joueur
-                    builtWall.rotation.y = camera.rotation.y;
+                        scene.add(builtWall);
+                        colliders.push(builtWall); // Le mur devient un obstacle solide pour les tirs et déplacements
 
-                    scene.add(builtWall);
+                        wallsPlaced++;
+                        document.getElementById('wall-count').innerText = maxWalls - wallsPlaced;
+                    }
                 }
             };
             window.onkeyup = (e) => keys[e.key.toLowerCase()] = false;
@@ -413,10 +431,27 @@
 
                     let sideDir = new THREE.Vector3(dir.z, 0, -dir.x);
 
-                    if (keys['z'] || keys['w']) camera.position.addScaledVector(dir, speed);
-                    if (keys['s']) camera.position.addScaledVector(dir, -speed);
-                    if (keys['q'] || keys['a']) camera.position.addScaledVector(sideDir, speed);
-                    if (keys['d']) camera.position.addScaledVector(sideDir, -speed);
+                    let nextPos = camera.position.clone();
+                    if (keys['z'] || keys['w']) nextPos.addScaledVector(dir, speed);
+                    if (keys['s']) nextPos.addScaledVector(dir, -speed);
+                    if (keys['q'] || keys['a']) nextPos.addScaledVector(sideDir, speed);
+                    if (keys['d']) nextPos.addScaledVector(sideDir, -speed);
+
+                    // GESTION DES COLLISIONS JOUEUR / MURS
+                    let canMove = true;
+                    for (let obj of colliders) {
+                        let box = new THREE.Box3().setFromObject(obj);
+                        // On élargit légèrement la boîte pour simuler la taille du joueur
+                        box.expandByScalar(0.6);
+                        if (box.containsPoint(nextPos)) {
+                            canMove = false;
+                            break;
+                        }
+                    }
+
+                    if (canMove) {
+                        camera.position.copy(nextPos);
+                    }
 
                     camera.position.x = Math.max(-28, Math.min(28, camera.position.x));
                     camera.position.z = Math.max(-28, Math.min(28, camera.position.z));
@@ -429,8 +464,26 @@
                         enemyGroup.lookAt(camera.position.x, enemyGroup.position.y, camera.position.z);
                     }
 
+                    // GESTION DES TIRS JOUEUR (Bloqués par les murs)
                     bullets.forEach((b, index) => {
                         b.position.add(b.velocity);
+
+                        let bulletHit = false;
+
+                        // Vérification collision tirs avec les obstacles/murs
+                        for (let obj of colliders) {
+                            let box = new THREE.Box3().setFromObject(obj);
+                            if (box.containsPoint(b.position)) {
+                                bulletHit = true;
+                                break;
+                            }
+                        }
+
+                        if (bulletHit) {
+                            scene.remove(b);
+                            bullets.splice(index, 1);
+                            return;
+                        }
 
                         if (enemyHP > 0 && b.position.distanceTo(enemyGroup.position) < 2) {
                             enemyHP -= chosenWeapon.damage;
@@ -458,8 +511,24 @@
                         }
                     });
 
+                    // GESTION DES TIRS DU BOT (Bloqués par les murs)
                     botBullets.forEach((bb, index) => {
                         bb.position.add(bb.velocity);
+
+                        let botBulletHit = false;
+                        for (let obj of colliders) {
+                            let box = new THREE.Box3().setFromObject(obj);
+                            if (box.containsPoint(bb.position)) {
+                                botBulletHit = true;
+                                break;
+                            }
+                        }
+
+                        if (botBulletHit) {
+                            scene.remove(bb);
+                            botBullets.splice(index, 1);
+                            return;
+                        }
 
                         if (bb.position.distanceTo(camera.position) < 1.5) {
                             playerHP -= 15;
