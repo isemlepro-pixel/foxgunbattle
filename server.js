@@ -9,35 +9,63 @@ const io = new Server(server);
 
 app.use(express.static(path.join(__dirname)));
 
-let waitingPlayers = [];
+let waitingPlayer = null;
+let activeMatches = {}; // Stocke les rooms/parties en cours
 
 io.on('connection', (socket) => {
     console.log(`Joueur connecté : ${socket.id}`);
 
     socket.on('find_match', () => {
-        console.log(`Recherche de match pour ${socket.id}`);
-        
-        // Évite de mettre le même joueur plusieurs fois en double
-        if (!waitingPlayers.includes(socket)) {
-            waitingPlayers.push(socket);
+        if (waitingPlayer && waitingPlayer.id !== socket.id) {
+            // Un adversaire attend : on lance le match 1V1 !
+            let p1 = waitingPlayer;
+            let p2 = socket;
+            waitingPlayer = null;
+
+            let roomId = 'room_' + p1.id + '_' + p2.id;
+            p1.join(roomId);
+            p2.join(roomId);
+
+            activeMatches[p1.id] = roomId;
+            activeMatches[p2.id] = roomId;
+
+            // On prévient les deux joueurs avec leur rôle respectif
+            p1.emit('match_found', { opponent: "Joueur 2", role: 'p1' });
+            p2.emit('match_found', { opponent: "Joueur 1", role: 'p2' });
+
+            console.log(`Match 1V1 lancé dans la room ${roomId}`);
+        } else {
+            // Pas encore d'adversaire, on met en attente
+            waitingPlayer = socket;
+            socket.emit('waiting_for_opponent');
+            console.log(`Joueur ${socket.id} en attente...`);
         }
+    });
 
-        // Si on a au moins 2 joueurs en attente, on lance le match entre eux
-        if (waitingPlayers.length >= 2) {
-            let p1 = waitingPlayers.shift();
-            let p2 = waitingPlayers.shift();
+    // Synchronisation des mouvements et actions
+    socket.on('player_move', (data) => {
+        let roomId = activeMatches[socket.id];
+        if (roomId) {
+            socket.to(roomId).emit('opponent_move', data);
+        }
+    });
 
-            // On envoie l'événement aux deux vrais joueurs
-            p1.emit('match_found', { opponent: "Joueur 2" });
-            p2.emit('match_found', { opponent: "Joueur 1" });
-
-            console.log(`Match lancé entre ${p1.id} et ${p2.id}`);
+    socket.on('player_shoot', (data) => {
+        let roomId = activeMatches[socket.id];
+        if (roomId) {
+            socket.to(roomId).emit('opponent_shoot', data);
         }
     });
 
     socket.on('disconnect', () => {
-        // Retirer le joueur de la file d'attente s'il se déconnecte
-        waitingPlayers = waitingPlayers.filter(s => s !== socket);
+        if (waitingPlayer === socket) {
+            waitingPlayer = null;
+        }
+        let roomId = activeMatches[socket.id];
+        if (roomId) {
+            io.to(roomId).emit('opponent_disconnected');
+            delete activeMatches[socket.id];
+        }
         console.log(`Joueur déconnecté : ${socket.id}`);
     });
 });
