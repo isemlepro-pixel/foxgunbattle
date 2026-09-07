@@ -56,7 +56,7 @@
             <h1>FoxGunBattle</h1>
             <p style="color: #ccc; margin-bottom: 20px;">Mode FPS 3D En Ligne</p>
             
-            <button onclick="showScreen('weapon-screen')" style="background: #16213e; border: 1px solid #e94560;">Choisir l'arme (Actif : <span id="current-weapon-label">Fusil d'Assaut</span>)</button>
+            <button onclick="showScreen('weapon-screen')" style="background: #16213e; border: 1px solid #e94560;">Choisir l'arme/outil (Actif : <span id="current-weapon-label">Fusil d'Assaut</span>)</button>
             <button onclick="startMatchmaking()">Jouer en 3D (1V1)</button>
             <button onclick="showScreen('settings-screen')" style="background: #16213e; border: 1px solid #aaa;">Paramètres</button>
         </div>
@@ -64,7 +64,11 @@
 
     <div id="weapon-screen" class="screen">
         <div class="container">
-            <h1>Équiper une Arme</h1>
+            <h1>Équiper une Arme / Outil</h1>
+            <div class="weapon-card" id="card-Pickaxe" onclick="equipWeapon('Pickaxe', 'Pioche', 35, 1.5)">
+                <h3>Pioche</h3>
+                <p style="color:#aaa; font-size:0.9rem;">Corps à corps - Casse les constructions et blesse</p>
+            </div>
             <div class="weapon-card" id="card-Rifle" onclick="equipWeapon('Rifle', 'Fusil d\'Assaut', 20, 0.9)">
                 <h3>Fusil d'Assaut</h3>
                 <p style="color:#aaa; font-size:0.9rem;">Polyvalent - Dégâts normaux</p>
@@ -122,7 +126,7 @@
         </div>
 
         <div style="position: absolute; bottom: 20px; color: white; font-weight: bold; background: rgba(0,0,0,0.7); padding: 10px 20px; border-radius: 5px; z-index: 5;">
-            ZQSD : Bouger | Clic : Tirer | F : Mur | G : Sol | V : Escalier (Mode actuel : <span id="build-mode-display" style="color:#e94560;">AUCUN (Arme)</span>)
+            ZQSD : Bouger | Clic : Action | C : Pioche | F : Mur | G : Sol | V : Escalier (Mode : <span id="build-mode-display" style="color:#e94560;">ARMES / PIOCHE</span>)
         </div>
     </div>
 
@@ -232,10 +236,11 @@
             pointLight.position.set(0, 15, 0);
             scene.add(pointLight);
 
-            const colliders = []; // Pour les murs et obstacles verticaux bloquants
-            const ramps = [];     // Pour les sols et escaliers/rampes où l'on peut marcher et monter
+            const colliders = [];
+            const ramps = [];     
+            const customBuilds = []; // Liste des constructions posées pour pouvoir les casser à la pioche
 
-            // SOL TEXTURÉ AVEC DES DALLES
+            // SOL TEXTURÉ
             const floorGroup = new THREE.Group();
             const tileSize = 6;
             for (let x = -30; x < 30; x += tileSize) {
@@ -274,7 +279,7 @@
             scene.add(wall4);
             colliders.push(wall4);
 
-            // --- CRÉATION DU BOT (ADVERSAIRE VISIBLE) ---
+            // BOT
             const enemyGroup = new THREE.Group();
             const torso = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2, 0.6), new THREE.MeshStandardMaterial({ color: 0xff476f }));
             torso.position.y = 1;
@@ -317,11 +322,7 @@
                     clearInterval(countInterval);
                     countdownEl.classList.remove('active');
                     matchStarted = true;
-                    try {
-                        gameScreen.requestPointerLock();
-                    } catch(err) {
-                        console.log(err);
-                    }
+                    try { gameScreen.requestPointerLock(); } catch(err) { console.log(err); }
                 }
             }, 1000);
 
@@ -367,7 +368,12 @@
 
                 if (!matchStarted || isGameOver || isSettingsOpen) return;
 
-                if (key === 'f') {
+                if (key === 'c') {
+                    // Touche raccourci pour équiper la pioche rapidement
+                    equipWeapon('Pickaxe', 'Pioche', 35, 1.5);
+                    currentBuildMode = 'WEAPON';
+                    updateBuildHUD();
+                } else if (key === 'f') {
                     currentBuildMode = (currentBuildMode === 'WALL') ? 'WEAPON' : 'WALL';
                     updateBuildHUD();
                 } else if (key === 'g') {
@@ -390,8 +396,8 @@
             function updateBuildHUD() {
                 let display = document.getElementById('build-mode-display');
                 if (currentBuildMode === 'WEAPON') {
-                    display.innerText = "AUCUN (Arme)";
-                    display.style.color = "#e94560";
+                    display.innerText = chosenWeapon.name.toUpperCase() + " (Arme/Outil)";
+                    display.style.color = chosenWeapon.id === 'Pickaxe' ? "#f39c12" : "#e94560";
                     playerWeapon.visible = true;
                 } else if (currentBuildMode === 'WALL') {
                     display.innerText = "MUR (F)";
@@ -408,7 +414,7 @@
                 }
             }
 
-            // GESTION DU CLIC : CONSTRUCTION PROpre SANS BUG DE VOL
+            // GESTION DU CLIC : TIR, PIOCHE OU CONSTRUCTION EN CHAÎNE
             window.addEventListener('mousedown', (e) => {
                 if (e.button !== 0 || document.pointerLockElement !== gameScreen || !matchStarted || isGameOver || isSettingsOpen) return;
 
@@ -418,47 +424,88 @@
                 dir.normalize();
 
                 if (currentBuildMode === 'WEAPON') {
-                    let bullet = new THREE.Mesh(bulletGeo, bulletMat);
-                    bullet.position.copy(camera.position);
-                    let exactDir = new THREE.Vector3();
-                    camera.getWorldDirection(exactDir);
-                    bullet.velocity = exactDir.clone().multiplyScalar(chosenWeapon.speed);
-                    scene.add(bullet);
-                    bullets.push(bullet);
+                    // Si c'est la pioche, gestion des dégâts de corps à corps et de destruction de constructions au clic
+                    if (chosenWeapon.id === 'Pickaxe') {
+                        // Dégâts au joueur adverse si proche
+                        if (camera.position.distanceTo(enemyGroup.position) < 4) {
+                            enemyHP -= chosenWeapon.damage;
+                            document.getElementById('enemy-hp').style.width = Math.max(0, enemyHP) + '%';
+                            torso.material.color.setHex(0xffffff);
+                            setTimeout(() => torso.material.color.setHex(0xff476f), 100);
+
+                            if (enemyHP <= 0) {
+                                isGameOver = true;
+                                clearInterval(botShootInterval);
+                                scene.remove(enemyGroup);
+                                document.exitPointerLock();
+                                setTimeout(() => { document.getElementById('victory-screen').classList.add('active'); }, 300);
+                            }
+                        }
+
+                        // Dégâts aux constructions posées (les casser avec la pioche)
+                        for (let i = customBuilds.length - 1; i >= 0; i--) {
+                            let buildObj = customBuilds[i];
+                            if (camera.position.distanceTo(buildObj.position) < 5) {
+                                scene.remove(buildObj);
+                                // Retirer des tableaux de collisions/rampes
+                                let idxRamp = ramps.indexOf(buildObj);
+                                if (idxRamp > -1) ramps.splice(idxRamp, 1);
+                                let idxColl = colliders.indexOf(buildObj);
+                                if (idxColl > -1) colliders.splice(idxColl, 1);
+                                customBuilds.splice(i, 1);
+                                break;
+                            }
+                        }
+                    } else {
+                        // Tir normal avec les armes à feu
+                        let bullet = new THREE.Mesh(bulletGeo, bulletMat);
+                        bullet.position.copy(camera.position);
+                        let exactDir = new THREE.Vector3();
+                        camera.getWorldDirection(exactDir);
+                        bullet.velocity = exactDir.clone().multiplyScalar(chosenWeapon.speed);
+                        scene.add(bullet);
+                        bullets.push(bullet);
+                    }
                 } 
                 else if (currentBuildMode === 'WALL') {
                     const wallGeo = new THREE.BoxGeometry(4, 3, 0.4);
                     const wallMatStruct = new THREE.MeshStandardMaterial({ color: 0xa0522d, roughness: 0.7 });
                     const builtWall = new THREE.Mesh(wallGeo, wallMatStruct);
-                    builtWall.position.copy(camera.position).add(dir.clone().multiplyScalar(5));
+                    builtWall.position.copy(camera.position).add(dir.clone().multiplyScalar(4));
                     builtWall.position.y = 1.5;
                     builtWall.rotation.y = camera.rotation.y;
                     scene.add(builtWall);
                     colliders.push(builtWall);
+                    customBuilds.push(builtWall);
                 }
                 else if (currentBuildMode === 'FLOOR') {
                     const floorGeo = new THREE.BoxGeometry(4, 0.2, 4);
                     const floorMatStruct = new THREE.MeshStandardMaterial({ color: 0x3498db, roughness: 0.6 });
                     const builtFloor = new THREE.Mesh(floorGeo, floorMatStruct);
-                    builtFloor.position.copy(camera.position).add(dir.clone().multiplyScalar(5));
-                    builtFloor.position.y = 0.1;
+                    builtFloor.position.copy(camera.position).add(dir.clone().multiplyScalar(4));
+                    // Permet d'empiler les sols par rapport à la hauteur actuelle du joueur
+                    builtFloor.position.y = Math.floor(camera.position.y / 2) * 2;
                     scene.add(builtFloor);
-                    ramps.push(builtFloor); // Ajouté dans les rampes pour pouvoir marcher dessus
+                    ramps.push(builtFloor);
+                    customBuilds.push(builtFloor);
                 }
                 else if (currentBuildMode === 'STAIR') {
-                    // RAMPE / ESCALIER STABLE ET FLUIDE QUE L'ON MONTE SANS SAUTER
+                    // ESCALIERS EMPILABLES : Se posent et s'ajustent en hauteur par rapport à là où se trouve le joueur
                     const stairGeo = new THREE.BoxGeometry(4, 0.2, 4);
                     const stairMatStruct = new THREE.MeshStandardMaterial({ color: 0x2ecc71, roughness: 0.6 });
                     const builtStair = new THREE.Mesh(stairGeo, stairMatStruct);
 
-                    let spawnPos = camera.position.clone().add(dir.clone().multiplyScalar(5));
-                    spawnPos.y = 1.0; 
+                    let spawnPos = camera.position.clone().add(dir.clone().multiplyScalar(4));
+                    // Ajuste automatiquement la hauteur du nouvel escalier pour pouvoir les enchaîner en hauteur
+                    spawnPos.y = Math.max(1.0, Math.floor(camera.position.y)); 
+                    
                     builtStair.position.copy(spawnPos);
                     builtStair.rotation.y = camera.rotation.y;
-                    builtStair.rotation.x = Math.PI / 5; // Pente douce pour grimper facilement
+                    builtStair.rotation.x = Math.PI / 5; // Pente pour grimper
 
                     scene.add(builtStair);
-                    ramps.push(builtStair); // Les rampes sont gérées à part pour éviter de faire voler le joueur
+                    ramps.push(builtStair);
+                    customBuilds.push(builtStair);
                 }
             });
 
@@ -496,14 +543,12 @@
                     if (keys['q']) nextPos.addScaledVector(sideDir, speed);
                     if (keys['d']) nextPos.addScaledVector(sideDir, -speed);
 
-                    // GESTION INTELLIGENTE DE LA HAUTEUR (Y) SANS EFFET DE VOL
-                    let targetY = 2; // Hauteur par défaut au sol
+                    // GESTION DE LA HAUTEUR SUR LES RAMPES ET ESCALIERS MULTI-NIVEAUX
+                    let targetY = 2; 
                     for (let ramp of ramps) {
                         let box = new THREE.Box3().setFromObject(ramp);
-                        // On vérifie si le joueur est au-dessus de la rampe sur les axes X et Z
                         if (nextPos.x >= box.min.x - 0.5 && nextPos.x <= box.max.x + 0.5 && 
                             nextPos.z >= box.min.z - 0.5 && nextPos.z <= box.max.z + 0.5) {
-                            // Ajustement progressif de la hauteur en fonction de la position sur la pente
                             let calculatedY = ramp.position.y + 2.0;
                             if (calculatedY > targetY) {
                                 targetY = calculatedY;
@@ -512,12 +557,10 @@
                     }
                     nextPos.y = targetY;
 
-                    // VÉRIFICATION DES COLLISIONS UNIQUEMENT CONTRE LES MURS (évite de se bloquer en l'air)
                     let canMove = true;
                     for (let obj of colliders) {
                         let box = new THREE.Box3().setFromObject(obj);
                         box.expandByScalar(0.1);
-                        // On vérifie la collision uniquement si on est à hauteur du mur
                         if (nextPos.y >= box.min.y && nextPos.y <= box.max.y && box.containsPoint(nextPos)) {
                             canMove = false;
                             break;
@@ -587,9 +630,7 @@
                                 clearInterval(botShootInterval);
                                 scene.remove(enemyGroup);
                                 document.exitPointerLock();
-                                setTimeout(() => {
-                                    document.getElementById('victory-screen').classList.add('active');
-                                }, 300);
+                                setTimeout(() => { document.getElementById('victory-screen').classList.add('active'); }, 300);
                             }
                         } 
                         else if (b.position.distanceTo(camera.position) > 50) {
