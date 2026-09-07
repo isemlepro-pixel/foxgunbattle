@@ -3,469 +3,230 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FoxGunBattle - 3D FPS</title>
-    <script src="/socket.io/socket.io.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <title>Fox Gun Battle - 3D FPS</title>
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
-        body { background: #0f0f1a; color: #fff; height: 100vh; width: 100vw; display: flex; justify-content: center; align-items: center; overflow: hidden; }
-        .container { text-align: center; background: rgba(26, 26, 46, 0.9); padding: 40px; border-radius: 15px; border: 2px solid #e94560; width: 480px; }
-        h1 { font-size: 2.5rem; margin-bottom: 20px; color: #e94560; text-transform: uppercase; }
-        button { padding: 15px 25px; font-size: 1.2rem; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; text-transform: uppercase; background: #e94560; color: white; width: 100%; margin-top: 15px; }
-        button:hover { background: #ff476f; }
-        .screen { display: none; width: 100%; height: 100%; flex-direction: column; justify-content: center; align-items: center; position: absolute; top: 0; left: 0; }
-        .screen.active { display: flex; }
-        #game-screen { background: #000; cursor: crosshair; }
-        #crosshair { position: absolute; top: 50%; left: 50%; width: 8px; height: 8px; background: #ff476f; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 5; }
-        
-        .settings-group { margin: 15px 0; text-align: left; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 5px; }
-        .settings-group label { display: block; margin-bottom: 5px; font-size: 0.9rem; color: #ccc; }
-        .settings-group input[type="range"] { width: 100%; cursor: pointer; }
-
-        .weapon-card { background: #16213e; border: 2px solid #0f3460; padding: 15px; border-radius: 8px; margin: 10px 0; cursor: pointer; transition: 0.2s; text-align: left; }
-        .weapon-card:hover { border-color: #e94560; background: #1a1a2e; }
-        .weapon-card.selected { border-color: #2ecc71; background: rgba(46, 204, 113, 0.1); }
-
-        #countdown-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: flex; justify-content: center; align-items: center; font-size: 6rem; font-weight: bold; color: #e94560; z-index: 50; display: none; }
-        #countdown-overlay.active { display: flex; }
-
-        #hud-top-left { position: absolute; top: 20px; left: 20px; background: rgba(0,0,0,0.8); padding: 15px; border-radius: 8px; border: 1px solid #2ecc71; z-index: 10; width: 250px; text-align: left; }
-        #hud-top-right { position: absolute; top: 20px; right: 20px; background: rgba(0,0,0,0.8); padding: 15px; border-radius: 8px; border: 1px solid #e94560; z-index: 10; width: 250px; text-align: left; }
-        .health-bar-container { width: 100%; background: #444; height: 15px; border-radius: 5px; margin-top: 5px; overflow: hidden; }
-        .health-bar { width: 100%; height: 100%; background: #2ecc71; transition: width 0.2s; }
-        .enemy-health-bar { background: #e94560; }
-
-        #settings-gear-btn { position: absolute; top: 20px; right: 290px; background: rgba(0,0,0,0.8); border: 1px solid #e94560; color: #fff; width: 45px; height: 45px; border-radius: 8px; font-size: 1.5rem; cursor: pointer; z-index: 20; display: flex; justify-content: center; align-items: center; }
-        #settings-gear-btn:hover { background: #e94560; }
-
-        #in-game-settings-modal { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 200; display: none; justify-content: center; align-items: center; }
-        #in-game-settings-modal.active { display: flex; }
-
-        #victory-screen, #defeat-screen { background: rgba(0, 0, 0, 0.85); z-index: 100; display: none; }
-        #victory-screen.active, #defeat-screen.active { display: flex; }
-
-        .loader { border: 5px solid rgba(255,255,255,0.1); border-top: 5px solid #e94560; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 20px auto; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .back-btn { background: transparent; border: 1px solid #aaa; color: #aaa; padding: 10px 20px; position: absolute; top: 20px; left: 20px; z-index: 10; cursor: pointer; }
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #111;
+            font-family: Arial, sans-serif;
+            user-select: none;
+        }
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-size: 20px;
+            text-shadow: 2px 2px 4px #000;
+            pointer-events: none;
+        }
+        #menu {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+        #menu h1 {
+            color: #ff5722;
+            font-size: 48px;
+            margin-bottom: 20px;
+            text-shadow: 0 0 10px rgba(255, 87, 34, 0.5);
+        }
+        #playBtn {
+            padding: 15px 40px;
+            font-size: 24px;
+            background-color: #ff5722;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        #playBtn:hover {
+            background-color: #e64a19;
+        }
+        #statusMessage {
+            color: #aaa;
+            margin-top: 15px;
+            font-size: 18px;
+        }
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 10px;
+            height: 10px;
+            background: white;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            mix-blend-mode: difference;
+        }
     </style>
 </head>
 <body>
 
-    <div id="main-menu" class="screen active">
-        <div class="container">
-            <h1>FoxGunBattle</h1>
-            <p style="color: #ccc; margin-bottom: 20px;">Mode FPS 3D En Ligne</p>
-            
-            <button onclick="showScreen('weapon-screen')" style="background: #16213e; border: 1px solid #e94560;">Choisir l'arme (Actif : <span id="current-weapon-label">Fusil d'Assaut</span>)</button>
-            <button onclick="startMatchmaking()">Jouer en 3D (1V1)</button>
-            <button onclick="showScreen('settings-screen')" style="background: #16213e; border: 1px solid #aaa;">Paramètres</button>
-        </div>
+    <!-- Écran de Menu & Matchmaking -->
+    <div id="menu">
+        <h1>FOX GUN BATTLE</h1>
+        <button id="playBtn">JOUER</button>
+        <div id="statusMessage">Clique pour lancer la recherche de partie...</div>
     </div>
 
-    <div id="weapon-screen" class="screen">
-        <div class="container">
-            <h1>Équiper une Arme</h1>
-            <div class="weapon-card" id="card-Rifle" onclick="equipWeapon('Rifle', 'Fusil d\'Assaut', 20, 0.9)">
-                <h3>Fusil d'Assaut</h3>
-                <p style="color:#aaa; font-size:0.9rem;">Polyvalent - Dégâts normaux</p>
-            </div>
-            <div class="weapon-card" id="card-Sniper" onclick="equipWeapon('Sniper', 'Sniper Lourd', 50, 0.4)">
-                <h3>Sniper Lourd</h3>
-                <p style="color:#aaa; font-size:0.9rem;">Lent - Très gros dégâts (2 tirs)</p>
-            </div>
-            <div class="weapon-card" id="card-SMG" onclick="equipWeapon('SMG', 'Mitraillette', 12, 1.2)">
-                <h3>Mitraillette</h3>
-                <p style="color:#aaa; font-size:0.9rem;">Cadence rapide - Dégâts légers</p>
-            </div>
-            <button onclick="showScreen('main-menu')">Retour au Menu</button>
-        </div>
+    <!-- Interface en jeu -->
+    <div id="ui">
+        <div>Statut : <span id="gameStatus">Dans le menu</span></div>
+        <div>Commandes : ZQSD (Bouger) | Souris (Regarder) | F (Construire un mur)</div>
     </div>
 
-    <div id="settings-screen" class="screen">
-        <div class="container">
-            <h1>Paramètres</h1>
-            <div class="settings-group">
-                <label for="sens-range-main">Sensibilité de la souris : <span id="sens-value-main">0.005</span></label>
-                <input type="range" id="sens-range-main" min="0.001" max="0.02" step="0.001" value="0.005" oninput="updateSensitivity(this.value)">
-            </div>
-            <button onclick="showScreen('main-menu')">Retour</button>
-        </div>
-    </div>
+    <div id="crosshair"></div>
 
-    <div id="matchmaking-screen" class="screen">
-        <div class="container">
-            <h1>Recherche...</h1>
-            <div class="loader"></div>
-            <p id="matchmaking-status">Recherche d'un adversaire 3D...</p>
-            <button class="back-btn" style="position:relative; top:0; left:0;" onclick="cancelMatchmaking()">Annuler</button>
-        </div>
-    </div>
-
-    <div id="game-screen" class="screen">
-        <div id="crosshair"></div>
-        <div id="countdown-overlay">3</div>
-        
-        <button id="settings-gear-btn" onclick="openInGameSettings()">⚙️</button>
-
-        <div id="hud-top-left">
-            <span style="font-weight: bold; color: #2ecc71;">Toi (<span id="player-weapon-name">Fusil d'Assaut</span>)</span>
-            <div class="health-bar-container">
-                <div id="player-hp" class="health-bar"></div>
-            </div>
-        </div>
-
-        <div id="hud-top-right">
-            <span id="enemy-name" style="font-weight: bold; color: #e94560;">Adversaire</span>
-            <div class="health-bar-container">
-                <div id="enemy-hp" class="health-bar enemy-health-bar"></div>
-            </div>
-        </div>
-
-        <div style="position: absolute; bottom: 20px; color: white; font-weight: bold; background: rgba(0,0,0,0.7); padding: 10px 20px; border-radius: 5px; z-index: 5;">
-            Clique pour capturer la souris | ZQSD : Bouger | Clic Gauche : Tirer
-        </div>
-    </div>
-
-    <div id="in-game-settings-modal" class="screen">
-        <div class="container" style="border-color: #2ecc71;">
-            <h1 style="color: #2ecc71; font-size: 2rem;">Paramètres</h1>
-            <div class="settings-group">
-                <label for="sens-range-game">Sensibilité de la souris : <span id="sens-value-game">0.005</span></label>
-                <input type="range" id="sens-range-game" min="0.001" max="0.02" step="0.001" value="0.005" oninput="updateSensitivity(this.value)">
-            </div>
-            <button onclick="closeInGameSettings()" style="background: #2ecc71;">Reprendre</button>
-        </div>
-    </div>
-
-    <div id="victory-screen" class="screen">
-        <div class="container" style="border-color: #2ecc71;">
-            <h1 style="color: #2ecc71;">VICTOIRE !</h1>
-            <p style="color: #ccc; margin-bottom: 20px;">Vous avez éliminé l'adversaire !</p>
-            <button onclick="location.reload()" style="background: #2ecc71;">Rejouer</button>
-        </div>
-    </div>
-
-    <div id="defeat-screen" class="screen">
-        <div class="container" style="border-color: #e94560;">
-            <h1 style="color: #e94560;">DÉFAITE...</h1>
-            <p style="color: #ccc; margin-bottom: 20px;">Le bot vous a éliminé !</p>
-            <button onclick="location.reload()">Réessayer</button>
-        </div>
-    </div>
+    <!-- Inclusion de Socket.io et Three.js -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
     <script>
         const socket = io();
-        let matchmakingTimer;
-        let mouseSensitivity = 0.005;
-        let chosenWeapon = { id: 'Rifle', name: "Fusil d'Assaut", damage: 20, speed: 0.9 };
-        let opponentNameGlobal = "Adversaire";
-        let isSettingsOpen = false;
 
-        document.getElementById('card-Rifle').classList.add('selected');
+        // Éléments DOM
+        const menu = document.getElementById('menu');
+        const playBtn = document.getElementById('playBtn');
+        const statusMessage = document.getElementById('statusMessage');
+        const gameStatus = document.getElementById('gameStatus');
 
-        function equipWeapon(id, name, damage, speed) {
-            chosenWeapon = { id, name, damage, speed };
-            document.getElementById('current-weapon-label').innerText = name;
-            document.getElementById('player-weapon-name').innerText = name;
-            document.querySelectorAll('.weapon-card').forEach(c => c.classList.remove('selected'));
-            document.getElementById('card-' + id).classList.add('selected');
-            showScreen('main-menu');
-        }
+        // Configuration Three.js (Scène, Caméra, Rendu)
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87ceeb); // Ciel bleu
 
-        function updateSensitivity(val) {
-            mouseSensitivity = parseFloat(val);
-            document.getElementById('sens-value-main').innerText = val;
-            document.getElementById('sens-value-game').innerText = val;
-            document.getElementById('sens-range-main').value = val;
-            document.getElementById('sens-range-game').value = val;
-        }
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 1.6, 5); // Hauteur des yeux
 
-        function showScreen(screenId) {
-            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-            document.getElementById(screenId).classList.add('active');
-        }
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
 
-        function openInGameSettings() {
-            isSettingsOpen = true;
-            document.exitPointerLock();
-            document.getElementById('in-game-settings-modal').classList.add('active');
-        }
+        // Lumière
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(10, 20, 10);
+        scene.add(dirLight);
 
-        function closeInGameSettings() {
-            isSettingsOpen = false;
-            document.getElementById('in-game-settings-modal').classList.remove('active');
-            document.getElementById('game-screen').requestPointerLock();
-        }
+        // Sol (Map)
+        const floorGeometry = new THREE.PlaneGeometry(100, 100);
+        const floorMaterial = new THREE.MeshLambertMaterial({ color: 0x557a2b });
+        const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+        floor.rotation.x = -Math.PI / 2;
+        scene.add(floor);
 
-        function startMatchmaking() {
-            showScreen('matchmaking-screen');
-            socket.emit('find_match');
-        }
-
-        function cancelMatchmaking() {
-            clearTimeout(matchmakingTimer);
-            showScreen('main-menu');
-        }
-
-        socket.on('match_found', (data) => {
-            opponentNameGlobal = data.opponent;
-            showScreen('game-screen');
-            init3DGame();
+        // --- SYSTÈME DE CONSTRUCTION (Façon Fortnite) ---
+        const walls = [];
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'KeyF') {
+                buildWall();
+            }
         });
 
-        function init3DGame() {
-            const scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x0f0f1a);
+        function buildWall() {
+            const wallGeometry = new THREE.BoxGeometry(4, 3, 0.3); // Mur en bois
+            const wallMaterial = new THREE.MeshLambertMaterial({ color: 0xa0522d });
+            const wall = new THREE.Mesh(wallGeometry, wallMaterial);
 
-            const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            const renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            
-            const gameScreen = document.getElementById('game-screen');
-            if (gameScreen.querySelector('canvas')) {
-                gameScreen.querySelector('canvas').remove();
-            }
-            gameScreen.appendChild(renderer.domElement);
+            // Positionner le mur devant la caméra
+            const distance = 4;
+            const vector = new THREE.Vector3(0, 0, -distance);
+            vector.applyQuaternion(camera.quaternion);
 
-            scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-            const pointLight = new THREE.PointLight(0xe94560, 2, 50);
-            pointLight.position.set(0, 15, 0);
-            scene.add(pointLight);
+            wall.position.copy(camera.position).add(vector);
+            wall.position.y = 1.5; // Hauteur du sol
 
-            const floor = new THREE.Mesh(
-                new THREE.PlaneGeometry(60, 60),
-                new THREE.MeshStandardMaterial({ color: 0x1b1b2f, roughness: 0.9 })
-            );
-            floor.rotation.x = -Math.PI / 2;
-            scene.add(floor);
-
-            const wallMat = new THREE.MeshStandardMaterial({ color: 0xe94560 });
-            const wall1 = new THREE.Mesh(new THREE.BoxGeometry(60, 6, 1), wallMat);
-            wall1.position.set(0, 3, -30);
-            scene.add(wall1);
-            const wall2 = new THREE.Mesh(new THREE.BoxGeometry(60, 6, 1), wallMat);
-            wall2.position.set(0, 3, 30);
-            scene.add(wall2);
-
-            function createTree(x, z) {
-                const trunk = new THREE.Mesh(new THREE.BoxGeometry(0.8, 3, 0.8), new THREE.MeshStandardMaterial({ color: 0x8B4513 }));
-                trunk.position.set(x, 1.5, z);
-                const leaves = new THREE.Mesh(new THREE.ConeGeometry(2, 4, 6), new THREE.MeshStandardMaterial({ color: 0x2e8b57 }));
-                leaves.position.set(x, 4, z);
-                scene.add(trunk);
-                scene.add(leaves);
-            }
-
-            function createCar(x, z, colorHex) {
-                const carGroup = new THREE.Group();
-                const body = new THREE.Mesh(new THREE.BoxGeometry(2.5, 1.2, 5), new THREE.MeshStandardMaterial({ color: colorHex }));
-                body.position.y = 0.8;
-                carGroup.add(body);
-                const cabin = new THREE.Mesh(new THREE.BoxGeometry(2, 1, 2.5), new THREE.MeshStandardMaterial({ color: 0x333333 }));
-                cabin.position.set(0, 1.7, -0.2);
-                carGroup.add(cabin);
-                carGroup.position.set(x, 0, z);
-                scene.add(carGroup);
-            }
-
-            createTree(-22, -10);
-            createTree(-20, 12);
-            createTree(22, 5);
-            createCar(-18, -5, 0x3498db);
-            createCar(18, 15, 0xe74c3c);
-
-            const enemyGroup = new THREE.Group();
-            const torso = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2, 0.6), new THREE.MeshStandardMaterial({ color: 0xff476f }));
-            torso.position.y = 1;
-            enemyGroup.add(torso);
-            const head = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.8), new THREE.MeshStandardMaterial({ color: 0xffccaa }));
-            head.position.y = 2.3;
-            enemyGroup.add(head);
-            enemyGroup.position.set(0, 0, -20);
-            scene.add(enemyGroup);
-
-            const weaponGeo = new THREE.BoxGeometry(0.3, 0.3, 1.2);
-            const weaponMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
-            const playerWeapon = new THREE.Mesh(weaponGeo, weaponMat);
-            playerWeapon.position.set(0.4, -0.3, -0.8);
-            camera.add(playerWeapon);
-            scene.add(camera);
-
-            let enemyHP = 100;
-            let playerHP = 100;
-            let botSpeed = 0.04;
-            let isGameOver = false;
-            let matchStarted = false;
-
-            camera.position.set(0, 2, 15);
-
-            let countdownEl = document.getElementById('countdown-overlay');
-            countdownEl.classList.add('active');
-            let count = 3;
-            countdownEl.innerText = count;
-
-            let countInterval = setInterval(() => {
-                count--;
-                if (count > 0) {
-                    countdownEl.innerText = count;
-                } else if (count === 0) {
-                    countdownEl.innerText = "FEU !";
-                } else {
-                    clearInterval(countInterval);
-                    countdownEl.classList.remove('active');
-                    matchStarted = true;
-                    gameScreen.requestPointerLock();
-                }
-            }, 1000);
-
-            let yaw = 0;
-            let pitch = 0;
-
-            gameScreen.onclick = (e) => { 
-                if (!isGameOver && matchStarted && !isSettingsOpen && e.target.id === 'game-screen') {
-                    gameScreen.requestPointerLock(); 
-                }
-            };
-
-            document.onmousemove = (e) => {
-                if (document.pointerLockElement === gameScreen && !isGameOver && matchStarted && !isSettingsOpen) {
-                    yaw -= e.movementX * mouseSensitivity;
-                    pitch -= e.movementY * mouseSensitivity;
-                    pitch = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, pitch));
-                    camera.rotation.order = 'YXZ';
-                    camera.rotation.y = yaw;
-                    camera.rotation.x = pitch;
-                }
-            };
-
-            let bullets = [];
-            const bulletGeo = new THREE.SphereGeometry(0.2, 8, 8);
-            const bulletMat = new THREE.MeshBasicMaterial({ color: 0xffcc00 });
-
-            let botBullets = [];
-            const botBulletGeo = new THREE.SphereGeometry(0.25, 8, 8);
-            const botBulletMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-
-            window.onmousedown = (e) => {
-                if (document.pointerLockElement === gameScreen && e.button === 0 && enemyHP > 0 && !isGameOver && matchStarted && !isSettingsOpen) {
-                    let bullet = new THREE.Mesh(bulletGeo, bulletMat);
-                    bullet.position.copy(camera.position);
-                    let dir = new THREE.Vector3();
-                    camera.getWorldDirection(dir);
-                    bullet.velocity = dir.multiplyScalar(chosenWeapon.speed);
-                    scene.add(bullet);
-                    bullets.push(bullet);
-                }
-            };
-
-            let keys = {};
-            window.onkeydown = (e) => keys[e.key.toLowerCase()] = true;
-            window.onkeyup = (e) => keys[e.key.toLowerCase()] = false;
-
-            let botShootInterval = setInterval(() => {
-                if (isGameOver || enemyHP <= 0 || !matchStarted || isSettingsOpen) return;
-
-                let botBullet = new THREE.Mesh(botBulletGeo, botBulletMat);
-                botBullet.position.copy(enemyGroup.position);
-                botBullet.position.y += 1.5;
-
-                let dirToPlayer = new THREE.Vector3().subVectors(camera.position, enemyGroup.position);
-                dirToPlayer.normalize();
-                botBullet.velocity = dirToPlayer.multiplyScalar(0.6);
-
-                scene.add(botBullet);
-                botBullets.push(botBullet);
-            }, 1000);
-
-            function animate() {
-                if (isGameOver) return;
-                requestAnimationFrame(animate);
-
-                if (matchStarted && !isSettingsOpen) {
-                    let speed = 0.15;
-                    let dir = new THREE.Vector3();
-                    camera.getWorldDirection(dir);
-                    dir.y = 0;
-                    dir.normalize();
-
-                    let sideDir = new THREE.Vector3(dir.z, 0, -dir.x);
-
-                    if (keys['z'] || keys['w']) camera.position.addScaledVector(dir, speed);
-                    if (keys['s']) camera.position.addScaledVector(dir, -speed);
-                    if (keys['q'] || keys['a']) camera.position.addScaledVector(sideDir, speed);
-                    if (keys['d']) camera.position.addScaledVector(sideDir, -speed);
-
-                    camera.position.x = Math.max(-28, Math.min(28, camera.position.x));
-                    camera.position.z = Math.max(-28, Math.min(28, camera.position.z));
-
-                    if (enemyHP > 0) {
-                        let botDir = new THREE.Vector3().subVectors(camera.position, enemyGroup.position);
-                        botDir.y = 0;
-                        botDir.normalize();
-                        enemyGroup.position.addScaledVector(botDir, botSpeed);
-                        enemyGroup.lookAt(camera.position.x, enemyGroup.position.y, camera.position.z);
-                    }
-
-                    bullets.forEach((b, index) => {
-                        b.position.add(b.velocity);
-
-                        if (enemyHP > 0 && b.position.distanceTo(enemyGroup.position) < 2) {
-                            enemyHP -= chosenWeapon.damage;
-                            document.getElementById('enemy-hp').style.width = Math.max(0, enemyHP) + '%';
-
-                            torso.material.color.setHex(0xffffff);
-                            setTimeout(() => torso.material.color.setHex(0xff476f), 100);
-
-                            scene.remove(b);
-                            bullets.splice(index, 1);
-
-                            if (enemyHP <= 0) {
-                                isGameOver = true;
-                                clearInterval(botShootInterval);
-                                scene.remove(enemyGroup);
-                                document.exitPointerLock();
-                                setTimeout(() => {
-                                    document.getElementById('victory-screen').classList.add('active');
-                                }, 300);
-                            }
-                        } 
-                        else if (b.position.distanceTo(camera.position) > 50) {
-                            scene.remove(b);
-                            bullets.splice(index, 1);
-                        }
-                    });
-
-                    botBullets.forEach((bb, index) => {
-                        bb.position.add(bb.velocity);
-
-                        if (bb.position.distanceTo(camera.position) < 1.5) {
-                            playerHP -= 15;
-                            document.getElementById('player-hp').style.width = Math.max(0, playerHP) + '%';
-
-                            document.body.style.backgroundColor = "#5a1818";
-                            setTimeout(() => document.body.style.backgroundColor = "#0f0f1a", 100);
-
-                            scene.remove(bb);
-                            botBullets.splice(index, 1);
-
-                            if (playerHP <= 0) {
-                                isGameOver = true;
-                                document.exitPointerLock();
-                                clearInterval(botShootInterval);
-                                document.getElementById('defeat-screen').classList.add('active');
-                            }
-                        }
-                        else if (bb.position.distanceTo(camera.position) > 60) {
-                            scene.remove(bb);
-                            botBullets.splice(index, 1);
-                        }
-                    });
-                }
-
-                renderer.render(scene, camera);
-            }
-            animate();
+            scene.add(wall);
+            walls.push(wall);
+            console.log("Mur construit !");
         }
+
+        // --- GESTION DU MATCHMAKING ---
+        playBtn.addEventListener('click', () => {
+            playBtn.style.display = 'none';
+            statusMessage.innerText = "Recherche d'un joueur en cours (10s max)...";
+            gameStatus.innerText = "Recherche...";
+
+            // Demander une partie au serveur
+            socket.emit('find_match');
+        });
+
+        // Écoute de la réponse du serveur (Trouvé un joueur ou un bot)
+        socket.on('match_found', (data) => {
+            statusMessage.innerText = "Partie trouvée ! Chargement...";
+            setTimeout(() => {
+                menu.style.display = 'none'; // Cacher le menu et lancer le jeu
+                gameStatus.innerText = "En jeu contre : " + data.opponent;
+                
+                // Activer le verrouillage de la souris pour bouger la caméra FPS
+                document.body.requestPointerLock();
+            }, 1000);
+        });
+
+        // Contrôles de la caméra à la souris
+        let pitch = 0;
+        let yaw = 0;
+        document.addEventListener('mousemove', (e) => {
+            if (document.pointerLockElement === document.body) {
+                const sensitivity = 0.002;
+                yaw -= e.movementX * sensitivity;
+                pitch -= e.movementY * sensitivity;
+
+                // Limiter la vue verticale pour ne pas tourner sur soi-même
+                pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
+
+                camera.rotation.set(0, 0, 0);
+                camera.rotation.y = yaw;
+                camera.rotation.x = pitch;
+            }
+        });
+
+        // Gestion des déplacements basiques (ZQSD)
+        const keys = { KeyW: false, KeyS: false, KeyA: false, KeyD: false };
+        window.addEventListener('keydown', (e) => { if (keys.hasOwnProperty(e.code)) keys[e.code] = true; });
+        window.addEventListener('keyup', (e) => { if (keys.hasOwnProperty(e.code)) keys[e.code] = false; });
+
+        function updateMovement() {
+            const speed = 0.1;
+            const dir = new THREE.Vector3();
+            camera.getWorldDirection(dir);
+            dir.y = 0; // Rester sur le plan horizontal
+            dir.normalize();
+
+            const sideDir = new THREE.Vector3(-dir.z, 0, dir.x);
+
+            if (keys.KeyW) camera.position.addScaledVector(dir, speed);
+            if (keys.KeyS) camera.position.addScaledVector(dir, -speed);
+            if (keys.KeyA) camera.position.addScaledVector(sideDir, speed);
+            if (keys.KeyD) camera.position.addScaledVector(sideDir, -speed);
+        }
+
+        // Boucle de rendu du jeu
+        function animate() {
+            requestAnimationFrame(animate);
+            updateMovement();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Adapter la taille de l'écran si la fenêtre change
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
     </script>
 </body>
 </html>
