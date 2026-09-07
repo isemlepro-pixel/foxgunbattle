@@ -51,7 +51,29 @@
 </head>
 <body>
 
-    <div id="main-menu" class="screen active">
+    <!-- Écran de Connexion / Inscription style Roblox -->
+    <div id="auth-screen" class="screen active">
+        <div class="container">
+            <h1>FoxGunBattle</h1>
+            <p style="color: #ccc; margin-bottom: 20px;">Connecte-toi ou crée ton compte</p>
+            
+            <div class="settings-group" style="text-align: left;">
+                <label>Nom d'utilisateur (Pseudo)</label>
+                <input type="text" id="auth-user" placeholder="Ex: ProGamer99" style="width:100%; padding:10px; border-radius:5px; border:none; margin-top:5px; background:#16213e; color:#fff;">
+            </div>
+            <div class="settings-group" style="text-align: left;">
+                <label>Mot de passe</label>
+                <input type="password" id="auth-pass" placeholder="Mot de passe" style="width:100%; padding:10px; border-radius:5px; border:none; margin-top:5px; background:#16213e; color:#fff;">
+            </div>
+
+            <p id="auth-error" style="color: #e94560; font-size: 0.9rem; margin-top: 5px;"></p>
+
+            <button onclick="loginUser()" style="background: #2ecc71;">Se connecter</button>
+            <button onclick="registerUser()" style="background: #e94560;">Créer un compte</button>
+        </div>
+    </div>
+
+    <div id="main-menu" class="screen">
         <div class="container">
             <h1>FoxGunBattle</h1>
             <p style="color: #ccc; margin-bottom: 20px;">Mode FPS 3D En Ligne (1V1)</p>
@@ -159,6 +181,7 @@
 
     <script>
         const socket = io();
+        let currentUsername = "";
         let mouseSensitivity = 0.005;
         let chosenWeapon = { id: 'Rifle', name: "Fusil d'Assaut", damage: 20, speed: 0.9 };
         let lastGunWeapon = { id: 'Rifle', name: "Fusil d'Assaut", damage: 20, speed: 0.9 };
@@ -167,6 +190,44 @@
         let isInGame = false;
 
         document.getElementById('card-Rifle').classList.add('selected');
+
+        async function registerUser() {
+            let user = document.getElementById('auth-user').value;
+            let pass = document.getElementById('auth-pass').value;
+
+            let res = await fetch('/api/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: user, password: pass })
+            });
+            let data = await res.json();
+
+            if (data.success) {
+                currentUsername = data.username;
+                showScreen('main-menu');
+            } else {
+                document.getElementById('auth-error').innerText = data.message;
+            }
+        }
+
+        async function loginUser() {
+            let user = document.getElementById('auth-user').value;
+            let pass = document.getElementById('auth-pass').value;
+
+            let res = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: user, password: pass })
+            });
+            let data = await res.json();
+
+            if (data.success) {
+                currentUsername = data.username;
+                showScreen('main-menu');
+            } else {
+                document.getElementById('auth-error').innerText = data.message;
+            }
+        }
 
         function equipWeapon(id, name, damage, speed) {
             chosenWeapon = { id, name, damage, speed };
@@ -212,9 +273,8 @@
 
         function startMatchmaking() {
             showScreen('matchmaking-screen');
-            document.getElementById('matchmaking-status').innerText = "Recherche d'un vrai adversaire en ligne...";
-            // Connexion au serveur pour trouver un joueur (plus de bot local)
-            socket.emit('find_match');
+            document.getElementById('matchmaking-status').innerText = "Recherche d'un vrai adversaire pour " + currentUsername + "...";
+            socket.emit('find_match', { username: currentUsername });
         }
 
         function cancelMatchmaking() {
@@ -366,7 +426,6 @@
                     camera.rotation.y = yaw;
                     camera.rotation.x = pitch;
 
-                    // Envoi de la position au serveur
                     socket.emit('player_move', {
                         x: camera.position.x,
                         y: camera.position.y,
@@ -376,7 +435,6 @@
                 }
             };
 
-            // Réception des mouvements de l'adversaire
             socket.on('opponent_move', (data) => {
                 enemyGroup.position.set(data.x, data.y - 2, data.z);
                 enemyGroup.rotation.y = data.rotationY;
@@ -486,7 +544,6 @@
 
                     if (chosenWeapon.id === 'Pickaxe') {
                         if (camera.position.distanceTo(enemyGroup.position) < 4) {
-                            // Envoi des dégâts au serveur
                             socket.emit('player_attack', { damage: chosenWeapon.damage });
                         }
                     } else {
@@ -544,7 +601,6 @@
                 }
             });
 
-            // Écoute des dégâts reçus de l'adversaire
             socket.on('take_damage', (data) => {
                 playerHP -= data.damage;
                 document.getElementById('player-hp').style.width = Math.max(0, playerHP) + '%';
