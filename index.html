@@ -149,7 +149,7 @@
         </div>
 
         <div style="position: absolute; bottom: 20px; color: white; font-weight: bold; background: rgba(0,0,0,0.7); padding: 10px 20px; border-radius: 5px; z-index: 5;">
-            ZQSD : Bouger | Clic : Action | C : Pioche / Arme | F : Mur | G : Sol | V : Escalier (Mode : <span id="build-mode-display" style="color:#e94560;">ARMES / PIOCHE</span>)
+            ZQSD : Bouger | ESPACE : Sauter | Clic : Action | C : Pioche / Arme | F : Mur | G : Sol | V : Escalier
         </div>
     </div>
 
@@ -342,7 +342,6 @@
             document.getElementById('defeat-screen').classList.add('active');
         });
 
-        // --- GÉNÉRATEUR DE TEXTURES FORTNITE (PROCÉDURALES) ---
         function createWoodTexture() {
             const canvas = document.createElement('canvas');
             canvas.width = 256; canvas.height = 256;
@@ -352,7 +351,6 @@
             for(let i=0; i<20; i++) {
                 ctx.fillRect(0, i*15, 256, 4);
             }
-            // Ajout de renforts métalliques esquissés
             ctx.fillStyle = '#3a3a3a';
             ctx.fillRect(20, 20, 216, 10);
             ctx.fillRect(20, 226, 216, 10);
@@ -379,8 +377,6 @@
             scene.add(pointLight);
 
             const colliders = [];
-            const ramps = [];     
-            const customBuilds = []; 
 
             const floorGroup = new THREE.Group();
             const tileSize = 6;
@@ -400,37 +396,23 @@
 
             const wallMat = new THREE.MeshStandardMaterial({ color: 0xe94560 });
             const wall1 = new THREE.Mesh(new THREE.BoxGeometry(60, 6, 1), wallMat);
-            wall1.position.set(0, 3, -30);
-            scene.add(wall1);
-            colliders.push(wall1);
-
+            wall1.position.set(0, 3, -30); scene.add(wall1); colliders.push(wall1);
             const wall2 = new THREE.Mesh(new THREE.BoxGeometry(60, 6, 1), wallMat);
-            wall2.position.set(0, 3, 30);
-            scene.add(wall2);
-            colliders.push(wall2);
-
+            wall2.position.set(0, 3, 30); scene.add(wall2); colliders.push(wall2);
             const wall3 = new THREE.Mesh(new THREE.BoxGeometry(1, 6, 60), wallMat);
-            wall3.position.set(-30, 3, 0);
-            scene.add(wall3);
-            colliders.push(wall3);
-
+            wall3.position.set(-30, 3, 0); scene.add(wall3); colliders.push(wall3);
             const wall4 = new THREE.Mesh(new THREE.BoxGeometry(1, 6, 60), wallMat);
-            wall4.position.set(30, 3, 0);
-            scene.add(wall4);
-            colliders.push(wall4);
+            wall4.position.set(30, 3, 0); scene.add(wall4); colliders.push(wall4);
 
             const enemyGroup = new THREE.Group();
             const torso = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2, 0.6), new THREE.MeshStandardMaterial({ color: 0xff476f }));
-            torso.position.y = 1;
-            enemyGroup.add(torso);
+            torso.position.y = 1; enemyGroup.add(torso);
             const head = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.8), new THREE.MeshStandardMaterial({ color: 0xffccaa }));
-            head.position.y = 2.3;
-            enemyGroup.add(head);
+            head.position.y = 2.3; enemyGroup.add(head);
             scene.add(enemyGroup);
 
             const weaponGeo = new THREE.BoxGeometry(0.3, 0.3, 1.2);
-            const weaponMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
-            const playerWeapon = new THREE.Mesh(weaponGeo, weaponMat);
+            const playerWeapon = new THREE.Mesh(weaponGeo, new THREE.MeshStandardMaterial({ color: 0x333333 }));
             playerWeapon.position.set(0.4, -0.3, -0.8);
             camera.add(playerWeapon);
             scene.add(camera);
@@ -450,6 +432,12 @@
             let isGameOver = false;
             let matchStarted = false;
             let currentBuildMode = 'WEAPON'; 
+
+            // Physique et Saut
+            let velocityY = 0;
+            let isGrounded = true;
+            const gravity = -0.015;
+            const jumpForce = 0.3;
 
             let countdownEl = document.getElementById('countdown-overlay');
             countdownEl.classList.add('active');
@@ -526,6 +514,10 @@
                 if (key === 's') keys['s'] = true;
                 if (key === 'q' || key === 'a') keys['d'] = true; 
                 if (key === 'd') keys['q'] = true;                
+                if (e.code === 'Space' && isGrounded && matchStarted && !isSettingsOpen) {
+                    velocityY = jumpForce;
+                    isGrounded = false;
+                }
 
                 if (!matchStarted || isGameOver || isSettingsOpen) return;
 
@@ -564,17 +556,11 @@
                     display.style.color = chosenWeapon.id === 'Pickaxe' ? "#f39c12" : "#e94560";
                     playerWeapon.visible = true;
                 } else if (currentBuildMode === 'WALL') {
-                    display.innerText = "MUR FORTNITE (F)";
-                    display.style.color = "#a0522d";
-                    playerWeapon.visible = false;
+                    display.innerText = "MUR (F)"; display.style.color = "#a0522d"; playerWeapon.visible = false;
                 } else if (currentBuildMode === 'FLOOR') {
-                    display.innerText = "SOL FORTNITE (G)";
-                    display.style.color = "#3498db";
-                    playerWeapon.visible = false;
+                    display.innerText = "SOL (G)"; display.style.color = "#3498db"; playerWeapon.visible = false;
                 } else if (currentBuildMode === 'STAIR') {
-                    display.innerText = "ESCALIER FORTNITE (V)";
-                    display.style.color = "#2ecc71";
-                    playerWeapon.visible = false;
+                    display.innerText = "ESCALIER (V)"; display.style.color = "#2ecc71"; playerWeapon.visible = false;
                 }
             }
 
@@ -585,7 +571,6 @@
                 let startX = playerWeapon.position.x;
                 let startY = playerWeapon.position.y;
                 let startZ = playerWeapon.position.z;
-
                 let progress = 0;
                 let swingInterval = setInterval(() => {
                     progress += 0.2;
@@ -612,7 +597,6 @@
 
                 if (currentBuildMode === 'WEAPON') {
                     triggerSwingAnimation();
-
                     if (chosenWeapon.id === 'Pickaxe') {
                         if (camera.position.distanceTo(enemyGroup.position) < 4) {
                             enemyHP = Math.max(0, enemyHP - chosenWeapon.damage);
@@ -629,52 +613,39 @@
                         bullets.push({ mesh: bullet, damage: chosenWeapon.damage });
 
                         socket.emit('player_shoot', {
-                            x: bullet.position.x,
-                            y: bullet.position.y,
-                            z: bullet.position.z,
-                            vx: bullet.velocity.x,
-                            vy: bullet.velocity.y,
-                            vz: bullet.velocity.z,
+                            x: bullet.position.x, y: bullet.position.y, z: bullet.position.z,
+                            vx: bullet.velocity.x, vy: bullet.velocity.y, vz: bullet.velocity.z,
                             damage: chosenWeapon.damage
                         });
                     }
                 } 
-                else if (currentBuildMode === 'WALL') {
-                    // Mur texturé style bois/métal Fortnite avec vraie collision physique
-                    const wallGeo = new THREE.BoxGeometry(4, 3, 0.5);
-                    const wallMat = new THREE.MeshStandardMaterial({ map: fortniteWoodTex, roughness: 0.5 });
-                    const builtWall = new THREE.Mesh(wallGeo, wallMat);
+                else {
+                    // Placement propre fixé bien droit devant le joueur (indépendant de la hauteur de la caméra)
                     let spawnPos = camera.position.clone().add(dir.clone().multiplyScalar(4));
-                    spawnPos.y = Math.floor(camera.position.y / 2) * 2 + 1.5;
-                    builtWall.position.copy(spawnPos);
-                    builtWall.rotation.y = camera.rotation.y;
-                    scene.add(builtWall);
-                    colliders.push(builtWall); // Empêche de passer à travers
-                    customBuilds.push(builtWall);
-                }
-                else if (currentBuildMode === 'FLOOR') {
-                    const floorGeo = new THREE.BoxGeometry(4, 0.3, 4);
-                    const floorMat = new THREE.MeshStandardMaterial({ map: fortniteWoodTex, roughness: 0.5 });
-                    const builtFloor = new THREE.Mesh(floorGeo, floorMat);
-                    let spawnPos = camera.position.clone().add(dir.clone().multiplyScalar(4));
-                    spawnPos.y = Math.floor(camera.position.y / 2) * 2;
-                    builtFloor.position.copy(spawnPos);
-                    scene.add(builtFloor);
-                    colliders.push(builtFloor); // Bloque aussi les mouvements traversants
-                    customBuilds.push(builtFloor);
-                }
-                else if (currentBuildMode === 'STAIR') {
-                    const stairGeo = new THREE.BoxGeometry(4, 0.3, 4);
-                    const stairMat = new THREE.MeshStandardMaterial({ map: fortniteWoodTex, roughness: 0.5 });
-                    const builtStair = new THREE.Mesh(stairGeo, stairMat);
-                    let spawnPos = camera.position.clone().add(dir.clone().multiplyScalar(4));
-                    spawnPos.y = Math.max(1.0, Math.floor(camera.position.y / 2) * 2); 
-                    builtStair.position.copy(spawnPos);
-                    builtStair.rotation.y = camera.rotation.y;
-                    builtStair.rotation.x = Math.PI / 4; // Rampe inclinée
-                    scene.add(builtStair);
-                    colliders.push(builtStair);
-                    customBuilds.push(builtStair);
+                    spawnPos.y = 1.5; // Hauteur fixe au sol pour éviter que ça pop en l'air
+
+                    if (currentBuildMode === 'WALL') {
+                        const builtWall = new THREE.Mesh(new THREE.BoxGeometry(4, 3, 0.5), new THREE.MeshStandardMaterial({ map: fortniteWoodTex, roughness: 0.5 }));
+                        builtWall.position.copy(spawnPos);
+                        builtWall.rotation.y = camera.rotation.y;
+                        scene.add(builtWall);
+                        colliders.push(builtWall);
+                    }
+                    else if (currentBuildMode === 'FLOOR') {
+                        const builtFloor = new THREE.Mesh(new THREE.BoxGeometry(4, 0.3, 4), new THREE.MeshStandardMaterial({ map: fortniteWoodTex, roughness: 0.5 }));
+                        builtFloor.position.set(spawnPos.x, 3.0, spawnPos.z); // Se pose en hauteur pour créer des étages
+                        scene.add(builtFloor);
+                        colliders.push(builtFloor);
+                    }
+                    else if (currentBuildMode === 'STAIR') {
+                        // Escalier droit et inclinable de manière propre pour pouvoir le gravir
+                        const builtStair = new THREE.Mesh(new THREE.BoxGeometry(4, 0.3, 4), new THREE.MeshStandardMaterial({ map: fortniteWoodTex, roughness: 0.5 }));
+                        builtStair.position.set(spawnPos.x, 1.5, spawnPos.z);
+                        builtStair.rotation.y = camera.rotation.y;
+                        builtStair.rotation.x = Math.PI / 6; // Angle parfait de rampe
+                        scene.add(builtStair);
+                        colliders.push(builtStair);
+                    }
                 }
             });
 
@@ -710,10 +681,20 @@
                 if (keys['q']) nextPos.add(sideDir.clone().multiplyScalar(moveSpeed));
                 if (keys['d']) nextPos.add(sideDir.clone().multiplyScalar(-moveSpeed));
 
-                // --- SYSTEME ANTI-TRAVERSÉE STRICT (COLLISIONS) ---
+                // Gravité et Saut
+                velocityY += gravity;
+                nextPos.y += velocityY;
+
+                // Sol de base
+                if (nextPos.y <= 2.0) {
+                    nextPos.y = 2.0;
+                    velocityY = 0;
+                    isGrounded = true;
+                }
+
+                // Collisions strictes avec les murs et constructions
                 let canMove = true;
                 for (let c of colliders) {
-                    // Distance minimale pour s'assurer qu'on ne traverse pas les murs et planchers posés
                     if (nextPos.distanceTo(c.position) < 2.0) {
                         canMove = false;
                         break;
@@ -722,6 +703,8 @@
 
                 if (canMove) {
                     camera.position.copy(nextPos);
+                } else {
+                    velocityY = 0;
                 }
 
                 for (let i = bullets.length - 1; i >= 0; i--) {
@@ -732,7 +715,6 @@
                         enemyHP = Math.max(0, enemyHP - bObj.damage);
                         document.getElementById('enemy-hp').style.width = enemyHP + '%';
                         socket.emit('player_attack', { damage: bObj.damage });
-
                         scene.remove(bObj.mesh);
                         bullets.splice(i, 1);
                         continue;
