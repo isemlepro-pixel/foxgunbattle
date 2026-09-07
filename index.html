@@ -191,7 +191,6 @@
 
         document.getElementById('card-Rifle').classList.add('selected');
 
-        // Si un pseudo est déjà stocké en mémoire locale, on va directement au menu !
         if (currentUsername) {
             document.getElementById('logged-user-label').innerText = currentUsername;
             showScreen('main-menu');
@@ -409,7 +408,9 @@
             }
 
             let playerHP = 100;
+            let enemyHP = 100;
             document.getElementById('player-hp').style.width = '100%';
+            document.getElementById('enemy-hp').style.width = '100%';
             let isGameOver = false;
             let matchStarted = false;
             let currentBuildMode = 'WEAPON'; 
@@ -576,6 +577,8 @@
 
                     if (chosenWeapon.id === 'Pickaxe') {
                         if (camera.position.distanceTo(enemyGroup.position) < 4) {
+                            enemyHP = Math.max(0, enemyHP - chosenWeapon.damage);
+                            document.getElementById('enemy-hp').style.width = enemyHP + '%';
                             socket.emit('player_attack', { damage: chosenWeapon.damage });
                         }
                     } else {
@@ -638,13 +641,11 @@
                 document.getElementById('player-hp').style.width = Math.max(0, playerHP) + '%';
                 document.body.style.backgroundColor = "#5a1818";
                 setTimeout(() => document.body.style.backgroundColor = "#0f0f1a", 100);
+            });
 
-                if (playerHP <= 0 && !isGameOver) {
-                    isGameOver = true;
-                    isInGame = false;
-                    try { document.exitPointerLock(); } catch(e){}
-                    document.getElementById('defeat-screen').classList.add('active');
-                }
+            socket.on('hit_confirmed', (data) => {
+                enemyHP = data.remainingHp;
+                document.getElementById('enemy-hp').style.width = Math.max(0, enemyHP) + '%';
             });
 
             socket.on('match_won', () => {
@@ -653,6 +654,15 @@
                     isInGame = false;
                     try { document.exitPointerLock(); } catch(e){}
                     document.getElementById('victory-screen').classList.add('active');
+                }
+            });
+
+            socket.on('match_lost', () => {
+                if (!isGameOver) {
+                    isGameOver = true;
+                    isInGame = false;
+                    try { document.exitPointerLock(); } catch(e){}
+                    document.getElementById('defeat-screen').classList.add('active');
                 }
             });
 
@@ -714,7 +724,11 @@
 
                     bullets.forEach((b, index) => {
                         b.position.add(b.velocity);
+                        // Vérifie si la balle touche l'adversaire
                         if (b.position.distanceTo(enemyGroup.position) < 2) {
+                            enemyHP = Math.max(0, enemyHP - chosenWeapon.damage);
+                            document.getElementById('enemy-hp').style.width = enemyHP + '%';
+
                             socket.emit('player_attack', { damage: chosenWeapon.damage });
                             scene.remove(b);
                             bullets.splice(index, 1);
