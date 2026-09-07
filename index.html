@@ -232,7 +232,8 @@
             pointLight.position.set(0, 15, 0);
             scene.add(pointLight);
 
-            const colliders = [];
+            const colliders = []; // Pour les murs et obstacles verticaux bloquants
+            const ramps = [];     // Pour les sols et escaliers/rampes où l'on peut marcher et monter
 
             // SOL TEXTURÉ AVEC DES DALLES
             const floorGroup = new THREE.Group();
@@ -383,7 +384,7 @@
                 if (key === 'z' || key === 'w') keys['z'] = false;
                 if (key === 's') keys['s'] = false;
                 if (key === 'q' || key === 'a') keys['q'] = false;
-                if (key === 'd' || key === 'd') keys['d'] = false;
+                if (key === 'd') keys['d'] = false;
             };
 
             function updateBuildHUD() {
@@ -407,7 +408,7 @@
                 }
             }
 
-            // GESTION DU CLIC : RAMPE FLUIDE ET MONTABLE SANS SAUTER
+            // GESTION DU CLIC : CONSTRUCTION PROpre SANS BUG DE VOL
             window.addEventListener('mousedown', (e) => {
                 if (e.button !== 0 || document.pointerLockElement !== gameScreen || !matchStarted || isGameOver || isSettingsOpen) return;
 
@@ -442,25 +443,22 @@
                     builtFloor.position.copy(camera.position).add(dir.clone().multiplyScalar(5));
                     builtFloor.position.y = 0.1;
                     scene.add(builtFloor);
-                    colliders.push(builtFloor);
+                    ramps.push(builtFloor); // Ajouté dans les rampes pour pouvoir marcher dessus
                 }
                 else if (currentBuildMode === 'STAIR') {
-                    // VRAIE RAMPE INCLINÉE (TYPE FORTNITE) QUE L'ON PEUT MONTER SANS SAUTER
+                    // RAMPE / ESCALIER STABLE ET FLUIDE QUE L'ON MONTE SANS SAUTER
                     const stairGeo = new THREE.BoxGeometry(4, 0.2, 4);
                     const stairMatStruct = new THREE.MeshStandardMaterial({ color: 0x2ecc71, roughness: 0.6 });
                     const builtStair = new THREE.Mesh(stairGeo, stairMatStruct);
 
-                    // Positionné à 5 unités devant
                     let spawnPos = camera.position.clone().add(dir.clone().multiplyScalar(5));
-                    spawnPos.y = 1.5; // Hauteur idéale pour faire rampe de transition
+                    spawnPos.y = 1.0; 
                     builtStair.position.copy(spawnPos);
                     builtStair.rotation.y = camera.rotation.y;
-                    
-                    // Inclinaison douce à 35 degrés pour pouvoir marcher dessus naturellement
-                    builtStair.rotation.x = Math.PI / 5.5; 
+                    builtStair.rotation.x = Math.PI / 5; // Pente douce pour grimper facilement
 
                     scene.add(builtStair);
-                    colliders.push(builtStair);
+                    ramps.push(builtStair); // Les rampes sont gérées à part pour éviter de faire voler le joueur
                 }
             });
 
@@ -498,25 +496,29 @@
                     if (keys['q']) nextPos.addScaledVector(sideDir, speed);
                     if (keys['d']) nextPos.addScaledVector(sideDir, -speed);
 
-                    // GESTION DE LA HAUTEUR DE LA CAMÉRA SUR LES STRUCTURES (RAMPES / SOLS)
-                    let targetY = 2; // Hauteur de base au sol
-                    for (let obj of colliders) {
-                        let box = new THREE.Box3().setFromObject(obj);
-                        // Si le joueur est au-dessus de la structure en X et Z, on ajuste sa hauteur Y automatiquement
-                        if (nextPos.x >= box.min.x && nextPos.x <= box.max.x && nextPos.z >= box.min.z && nextPos.z <= box.max.z) {
-                            if (box.max.y > targetY && nextPos.y <= box.max.y + 1) {
-                                targetY = Math.max(targetY, box.max.y + 1.5);
+                    // GESTION INTELLIGENTE DE LA HAUTEUR (Y) SANS EFFET DE VOL
+                    let targetY = 2; // Hauteur par défaut au sol
+                    for (let ramp of ramps) {
+                        let box = new THREE.Box3().setFromObject(ramp);
+                        // On vérifie si le joueur est au-dessus de la rampe sur les axes X et Z
+                        if (nextPos.x >= box.min.x - 0.5 && nextPos.x <= box.max.x + 0.5 && 
+                            nextPos.z >= box.min.z - 0.5 && nextPos.z <= box.max.z + 0.5) {
+                            // Ajustement progressif de la hauteur en fonction de la position sur la pente
+                            let calculatedY = ramp.position.y + 2.0;
+                            if (calculatedY > targetY) {
+                                targetY = calculatedY;
                             }
                         }
                     }
                     nextPos.y = targetY;
 
-                    // Vérification des collisions horizontales pour ne pas traverser les murs/structures de face
+                    // VÉRIFICATION DES COLLISIONS UNIQUEMENT CONTRE LES MURS (évite de se bloquer en l'air)
                     let canMove = true;
                     for (let obj of colliders) {
                         let box = new THREE.Box3().setFromObject(obj);
                         box.expandByScalar(0.1);
-                        if (box.containsPoint(nextPos)) {
+                        // On vérifie la collision uniquement si on est à hauteur du mur
+                        if (nextPos.y >= box.min.y && nextPos.y <= box.max.y && box.containsPoint(nextPos)) {
                             canMove = false;
                             break;
                         }
