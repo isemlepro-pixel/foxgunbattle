@@ -79,7 +79,6 @@
             
             <button onclick="showScreen('weapon-screen')" style="background: #16213e; border: 1px solid #e94560;">Choisir l'arme/outil (Actif : <span id="current-weapon-label">Fusil d'Assaut</span>)</button>
             <button onclick="startMatchmaking()">Jouer en Ligne</button>
-            <!-- BOUTON JOUER CONTRE DES BOTS AJOUTÉ ICI -->
             <button onclick="startBotMatch()" style="background: #2ed573;">Jouer contre des bots</button>
             <button onclick="showScreen('settings-screen')" style="background: #16213e; border: 1px solid #aaa;">Paramètres</button>
             <button onclick="logoutUser()" style="background: #555; font-size:0.9rem; padding:10px;">Se déconnecter</button>
@@ -309,7 +308,6 @@
             socket.emit('find_match', { username: currentUsername });
         }
 
-        // --- FONCTION AJOUTÉE POUR LANCER LA PARTIE CONTRE LE BOT ---
         function startBotMatch() {
             socket.emit('find_bot_match', { username: currentUsername });
         }
@@ -505,12 +503,13 @@
 
             let keys = {};
 
+            // --- CORRECTION TOUCHES Q ET D INVERSÉES ---
             window.onkeydown = (e) => {
                 let key = e.key.toLowerCase();
                 if (key === 'z' || key === 'w') keys['z'] = true;
                 if (key === 's') keys['s'] = true;
-                if (key === 'q' || key === 'a') keys['q'] = true;
-                if (key === 'd') keys['d'] = true;
+                if (key === 'q' || key === 'a') keys['d'] = true; // Q active le déplacement à droite corrigé
+                if (key === 'd') keys['q'] = true;                // D active le déplacement à gauche corrigé
 
                 if (!matchStarted || isGameOver || isSettingsOpen) return;
 
@@ -538,8 +537,8 @@
                 let key = e.key.toLowerCase();
                 if (key === 'z' || key === 'w') keys['z'] = false;
                 if (key === 's') keys['s'] = false;
-                if (key === 'q' || key === 'a') keys['q'] = false;
-                if (key === 'd') keys['d'] = false;
+                if (key === 'q' || key === 'a') keys['d'] = false;
+                if (key === 'd') keys['q'] = false;
             };
 
             function updateBuildHUD() {
@@ -607,9 +606,9 @@
                         bullet.position.copy(camera.position);
                         let exactDir = new THREE.Vector3();
                         camera.getWorldDirection(exactDir);
-                        bullet.velocity = exactDir.clone().multiplyScalar(chosenWeapon.speed);
+                        bullet.velocity = exactDir.clone().multiplyScalar(chosenWeapon.speed * 2); // Vitesse augmentée pour fluidifier le tir
                         scene.add(bullet);
-                        bullets.push(bullet);
+                        bullets.push({ mesh: bullet, damage: chosenWeapon.damage });
 
                         socket.emit('player_shoot', {
                             x: bullet.position.x,
@@ -691,11 +690,26 @@
 
                 camera.position.copy(nextPos);
 
+                // --- GESTION DES BALLES ET COLLISION AVEC L'ENNEMI ---
                 for (let i = bullets.length - 1; i >= 0; i--) {
-                    let b = bullets[i];
-                    b.position.add(b.velocity);
-                    if (b.position.distanceTo(camera.position) > 100) {
-                        scene.remove(b);
+                    let bObj = bullets[i];
+                    bObj.mesh.position.add(bObj.mesh.velocity);
+
+                    // Vérification de la collision de la balle avec l'ennemi (Hitbox)
+                    if (bObj.mesh.position.distanceTo(enemyGroup.position) < 2.0) {
+                        enemyHP = Math.max(0, enemyHP - bObj.damage);
+                        document.getElementById('enemy-hp').style.width = enemyHP + '%';
+                        
+                        // Envoi de l'impact au serveur
+                        socket.emit('player_attack', { damage: bObj.damage });
+
+                        scene.remove(bObj.mesh);
+                        bullets.splice(i, 1);
+                        continue;
+                    }
+
+                    if (bObj.mesh.position.distanceTo(camera.position) > 100) {
+                        scene.remove(bObj.mesh);
                         bullets.splice(i, 1);
                     }
                 }
