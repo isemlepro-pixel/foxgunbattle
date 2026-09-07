@@ -407,14 +407,14 @@
                 }
             }
 
-            // GESTION DU CLIC : LE MUR ET L'ESCALIER ONT EXACTEMENT LA MÊME STRUCTURE DE PLACEMENT ET DE COLLIDER
+            // GESTION DU CLIC : VRAI ESCALIER EN MARCHES SOLIDES (PLACÉ COMME LE MUR)
             window.addEventListener('mousedown', (e) => {
                 if (e.button !== 0 || document.pointerLockElement !== gameScreen || !matchStarted || isGameOver || isSettingsOpen) return;
 
-                let dir = new THREE.Vector3();
-                camera.getWorldDirection(dir);
-                dir.y = 0; 
-                dir.normalize();
+                    let dir = new THREE.Vector3();
+                    camera.getWorldDirection(dir);
+                    dir.y = 0; 
+                    dir.normalize();
 
                 if (currentBuildMode === 'WEAPON') {
                     let bullet = new THREE.Mesh(bulletGeo, bulletMat);
@@ -445,21 +445,30 @@
                     colliders.push(builtFloor);
                 }
                 else if (currentBuildMode === 'STAIR') {
-                    // ESCALIER CONÇU COMME LE MUR : Même dimensions de base, mais incliné à 45°
-                    const stairGeo = new THREE.BoxGeometry(4, 3, 0.4);
-                    const stairMatStruct = new THREE.MeshStandardMaterial({ color: 0xd35400, roughness: 0.6 });
-                    const builtStair = new THREE.Mesh(stairGeo, stairMatStruct);
-                    
-                    // Placement rigoureusement identique au mur (à 5 unités devant, hauteur centrée à 1.5)
-                    builtStair.position.copy(camera.position).add(dir.clone().multiplyScalar(5));
-                    builtStair.position.y = 1.5;
-                    builtStair.rotation.y = camera.rotation.y;
-                    
-                    // Inclinaison de la boîte pour former une rampe d'escalier solide
-                    builtStair.rotation.x = Math.PI / 4; 
+                    // Conteneur global pour l'escalier placé à 5 unités devant (comme le mur)
+                    const stairGroup = new THREE.Group();
+                    let spawnPos = camera.position.clone().add(dir.clone().multiplyScalar(5));
+                    spawnPos.y = 0;
+                    stairGroup.position.copy(spawnPos);
+                    stairGroup.rotation.y = camera.rotation.y;
 
-                    scene.add(builtStair);
-                    colliders.push(builtStair); // Sert à la fois de visuel et de collider parfait comme le mur
+                    // Création de 4 vraies marches montantes pour pouvoir grimper dessus
+                    const stepMat = new THREE.MeshStandardMaterial({ color: 0xd35400, roughness: 0.6 });
+                    const numSteps = 4;
+                    for (let i = 0; i < numSteps; i++) {
+                        let stepWidth = 4;
+                        let stepHeight = (i + 1) * 0.75; // Monte progressivement jusqu'à 3 de haut
+                        let stepDepth = (numSteps - i) * (3 / numSteps); // Chaque marche est plus courte en profondeur
+
+                        const stepMesh = new THREE.Mesh(new THREE.BoxGeometry(stepWidth, stepHeight, stepDepth), stepMat);
+                        // Positionne chaque marche pour former l'escalier
+                        stepMesh.position.set(0, stepHeight / 2, -1.5 + (i * (3 / numSteps)) + (stepDepth / 2));
+                        
+                        stairGroup.add(stepMesh);
+                        colliders.push(stepMesh); // Chaque marche devient solide et permet de monter dessus
+                    }
+
+                    scene.add(stairGroup);
                 }
             });
 
