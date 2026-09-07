@@ -14,10 +14,14 @@ app.use(express.static(path.join(__dirname)));
 const USERS_FILE = path.join(__dirname, 'users.json');
 
 function getUsers() {
-    if (!fs.existsSync(USERS_FILE)) {
-        fs.writeFileSync(USERS_FILE, JSON.stringify({}));
+    try {
+        if (!fs.existsSync(USERS_FILE)) {
+            fs.writeFileSync(USERS_FILE, JSON.stringify({}));
+        }
+        return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
+    } catch (e) {
+        return {};
     }
-    return JSON.parse(fs.readFileSync(USERS_FILE));
 }
 
 function saveUsers(users) {
