@@ -1,146 +1,123 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const path = require('path');
 const { MongoClient } = require('mongodb');
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
+// Configuration MongoDB Atlas (récupérée depuis les variables d'environnement Render ou valeur par défaut)
+const mongoUri = process.env.MONGO_URI || "mongodb+srv://isemlepro_db_user:MonMotDePasse123@cluster0.snwld4m.mongodb.net/?retryWrites=true&w=majority";
+const dbName = "foxgunbattle"; // Nom de ta base de données
+
+let db, usersCollection;
+
+// Connexion à MongoDB Atlas
+MongoClient.connect(mongoUri)
+  .then(client => {
+    db = client.db(dbName);
+    usersCollection = db.collection('users');
+    console.log("Connecté à MongoDB Atlas avec succès !");
+  })
+  .catch(err => {
+    console.error("Erreur de connexion à MongoDB :", err);
+  });
+
+// Servir les fichiers statiques du dossier public
+app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
-app.use(express.static(path.join(__dirname)));
 
-// Utilise la variable d'environnement de Render ou ton lien MongoDB Atlas en secours
-const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://isemlepro_db_user:GYKKE9eLQwd5uSS3@cluster0.snwld4m.mongodb.net/?retryWrites=true&w=majority";
-const DB_NAME = "foxgunbattle";
-
-let db;
-
-// Connexion à MongoDB
-MongoClient.connect(MONGO_URI)
-    .then(client => {
-        db = client.db(DB_NAME);
-        console.log("Connecté avec succès à la base de données MongoDB !");
-        
-        const PORT = process.env.PORT || 3000;
-        server.listen(PORT, () => console.log(`Serveur actif sur le port ${PORT}`));
-    })
-    .catch(err => {
-        console.error("Erreur de connexion à MongoDB :", err);
-    });
-
-// Inscription
+// Routes pour l'authentification et les comptes
 app.post('/api/register', async (req, res) => {
+    const { username, password } = req.body;
+    if (!username || !password) {
+        return res.status(400).json({ error: "Nom d'utilisateur et mot de passe requis." });
+    }
     try {
-        const { username, password } = req.body;
-        if (!username || !password) return res.json({ success: false, message: "Champs vides !" });
-        
-        const usersCollection = db.collection('users');
         const existingUser = await usersCollection.findOne({ username });
-
         if (existingUser) {
-            return res.json({ success: false, message: "Ce pseudo existe déjà !" });
+            return res.status(400).json({ error: "Ce nom d'utilisateur existe déjà." });
         }
-
-        await usersCollection.insertOne({ username, password, wins: 0, losses: 0 });
-        res.json({ success: true, username });
-    } catch (e) {
-        console.error(e);
-        res.json({ success: false, message: "Erreur serveur lors de l'inscription." });
+        await usersCollection.insertOne({ username, password, stats: { wins: 0, losses: 0 } });
+        res.json({ success: true, message: "Compte créé avec succès !" });
+    } catch (err) {
+        res.status(500).json({ error: "Erreur serveur lors de l'inscription." });
     }
 });
 
-// Connexion
 app.post('/api/login', async (req, res) => {
+    const { username, password } = req.body;
     try {
-        const { username, password } = req.body;
-        const usersCollection = db.collection('users');
-        
-        const user = await usersCollection.findOne({ username });
-
-        if (!user || user.password !== password) {
-            return res.json({ success: false, message: "Pseudo ou mot de passe incorrect !" });
+        const user = await usersCollection.findOne({ username, password });
+        if (!user) {
+            return res.status(400).json({ error: "Identifiants incorrects." });
         }
-
-        res.json({ success: true, username });
-    } catch (e) {
-        console.error(e);
-        res.json({ success: false, message: "Erreur serveur lors de la connexion." });
+        res.json({ success: true, username: user.username, stats: user.stats });
+    } catch (err) {
+        res.status(500).json({ error: "Erreur serveur lors de la connexion." });
     }
 });
 
-let waitingPlayer = null;
-let activeMatches = {};
-let playerHps = {};
+// Gestion du jeu en temps réel avec Socket.io (et intégration du Bot)
+const activeGames = {};
 
 io.on('connection', (socket) => {
-    console.log(`Joueur connecté : ${socket.id}`);
+    console.log(`Un joueur s'est connecté : ${socket.id}`);
 
-    socket.on('find_match', (data) => {
-        socket.username = data && data.username ? data.username : "Invité";
-        playerHps[socket.id] = 100;
+    // Lancement d'une partie contre un Bot
+    socket.on('join-bot-game', () => {
+        console.log(`Mode Bot activé pour le joueur : ${socket.id}`);
 
-        if (waitingPlayer && waitingPlayer.id !== socket.id) {
-            let p1 = waitingPlayer;
-            let p2 = socket;
-            waitingPlayer = null;
+        // Initialisation de l'état de la partie pour ce joueur
+        activeGames[socket.id] = {
+            player: { x: 0, y: 0, z: 0, health: 100 },
+            bot: { id: 'bot_1', x: 5, y: 0, z: 5, health: 100 }
+        };
 
-            let roomId = 'room_' + p1.id + '_' + p2.id;
-            p1.join(roomId);
-            p2.join(roomId);
-
-            activeMatches[p1.id] = roomId;
-            activeMatches[p2.id] = roomId;
-
-            p1.emit('match_found', { opponent: p2.username, role: 'p1' });
-            p2.emit('match_found', { opponent: p1.username, role: 'p2' });
-        } else {
-            waitingPlayer = socket;
-            socket.emit('waiting_for_opponent');
-        }
-    });
-
-    socket.on('player_move', (data) => {
-        let roomId = activeMatches[socket.id];
-        if (roomId) socket.to(roomId).emit('opponent_move', data);
-    });
-
-    socket.on('player_shoot', (data) => {
-        let roomId = activeMatches[socket.id];
-        if (roomId) socket.to(roomId).emit('opponent_shoot', data);
-    });
-
-    socket.on('player_attack', (data) => {
-        let roomId = activeMatches[socket.id];
-        if (roomId) {
-            let socketsInRoom = io.sockets.adapter.rooms.get(roomId);
-            if (socketsInRoom) {
-                for (let socketId of socketsInRoom) {
-                    if (socketId !== socket.id) {
-                        playerHps[socketId] = (playerHps[socketId] || 100) - data.damage;
-                        let currentHp = playerHps[socketId];
-
-                        io.to(socketId).emit('take_damage', { damage: data.damage });
-                        socket.emit('hit_confirmed', { remainingHp: currentHp });
-
-                        if (currentHp <= 0) {
-                            socket.emit('match_won');
-                            io.to(socketId).emit('match_lost');
-                        }
-                    }
-                }
+        // Boucle de mise à jour du bot (IA simple) toutes les 50 millisecondes
+        const botInterval = setInterval(() => {
+            const game = activeGames[socket.id];
+            if (!game) {
+                clearInterval(botInterval);
+                return;
             }
-        }
+
+            // Simple logique : le bot se rapproche un peu du joueur
+            if (game.bot.x < game.player.x) game.bot.x += 0.1;
+            if (game.bot.x > game.player.x) game.bot.x -= 0.1;
+            if (game.bot.z < game.player.z) game.bot.z += 0.1;
+            if (game.bot.z > game.player.z) game.bot.z -= 0.1;
+
+            // Envoi des nouvelles positions au client
+            socket.emit('game-update', {
+                player: game.player,
+                bot: game.bot
+            });
+        }, 50);
+
+        // Réception des mouvements du joueur réel
+        socket.on('player-move', (data) => {
+            if (activeGames[socket.id]) {
+                activeGames[socket.id].player = data;
+            }
+        });
+
+        // Gestion de la déconnexion ou de la fin de partie
+        socket.on('disconnect', () => {
+            clearInterval(botInterval);
+            delete activeGames[socket.id];
+            console.log(`Partie fermée pour le joueur : ${socket.id}`);
+        });
     });
 
     socket.on('disconnect', () => {
-        if (waitingPlayer === socket) waitingPlayer = null;
-        let roomId = activeMatches[socket.id];
-        if (roomId) {
-            io.to(roomId).emit('opponent_disconnected');
-            delete activeMatches[socket.id];
-        }
-        delete playerHps[socket.id];
+        console.log(`Joueur déconnecté : ${socket.id}`);
     });
+});
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+    console.log(`Serveur démarré sur le port ${PORT}`);
 });
