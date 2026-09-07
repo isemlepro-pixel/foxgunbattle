@@ -1,23 +1,67 @@
 const express = require('express');
-const http = require('http');
+const http = http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const fs = require('fs'); // Pour sauvegarder les comptes dans un fichier JSON
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
+app.use(express.json());
 app.use(express.static(path.join(__dirname)));
 
+const USERS_FILE = path.join(__dirname, 'users.json');
+
+// Charger ou initialiser la base de données de comptes
+function getUsers() {
+    if (!fs.existsSync(USERS_FILE)) {
+        fs.writeFileSync(USERS_FILE, JSON.stringify({}));
+    }
+    return JSON.parse(fs.readFileSync(USERS_FILE));
+}
+
+function saveUsers(users) {
+    fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
+}
+
+// Routes API pour Connexion / Inscription à la Roblox
+app.post('/api/register', (req, res) => {
+    const { username, password } = req.body;
+    if (!username || !password) return res.json({ success: false, message: "Champs vides !" });
+    
+    let users = getUsers();
+    if (users[username]) {
+        return res.json({ success: false, message: "Ce pseudo existe déjà !" });
+    }
+
+    users[username] = { password, wins: 0, losses: 0 };
+    saveUsers(users);
+    res.json({ success: true, username });
+});
+
+app.post('/api/login', (req, res) => {
+    const { username, password } = req.body;
+    let users = getUsers();
+    
+    if (!users[username] || users[username].password !== password) {
+        return res.json({ success: false, message: "Pseudo ou mot de passe incorrect !" });
+    }
+
+    res.json({ success: true, username });
+});
+
+// Matchmaking Socket.io existant
 let waitingPlayer = null;
-let activeMatches = {}; // Stocke les rooms/parties en cours
+let activeMatches = {};
 
 io.on('connection', (socket) => {
     console.log(`Joueur connecté : ${socket.id}`);
 
-    socket.on('find_match', () => {
+    socket.on('find_match', (data) => {
+        socket.username = data.username || "Invité";
+
         if (waitingPlayer && waitingPlayer.id !== socket.id) {
-            // Un adversaire attend : on lance le match 1V1 !
             let p1 = waitingPlayer;
             let p2 = socket;
             waitingPlayer = null;
@@ -29,48 +73,33 @@ io.on('connection', (socket) => {
             activeMatches[p1.id] = roomId;
             activeMatches[p2.id] = roomId;
 
-            // On prévient les deux joueurs avec leur rôle respectif
-            p1.emit('match_found', { opponent: "Joueur 2", role: 'p1' });
-            p2.emit('match_found', { opponent: "Joueur 1", role: 'p2' });
-
-            console.log(`Match 1V1 lancé dans la room ${roomId}`);
+            p1.emit('match_found', { opponent: p2.username, role: 'p1' });
+            p2.emit('match_found', { opponent: p1.username, role: 'p2' });
         } else {
-            // Pas encore d'adversaire, on met en attente
             waitingPlayer = socket;
             socket.emit('waiting_for_opponent');
-            console.log(`Joueur ${socket.id} en attente...`);
         }
     });
 
-    // Synchronisation des mouvements et actions
     socket.on('player_move', (data) => {
         let roomId = activeMatches[socket.id];
-        if (roomId) {
-            socket.to(roomId).emit('opponent_move', data);
-        }
+        if (roomId) socket.to(roomId).emit('opponent_move', data);
     });
 
-    socket.on('player_shoot', (data) => {
+    socket.on('player_attack', (data) => {
         let roomId = activeMatches[socket.id];
-        if (roomId) {
-            socket.to(roomId).emit('opponent_shoot', data);
-        }
+        if (roomId) socket.to(roomId).emit('take_damage', data);
     });
 
     socket.on('disconnect', () => {
-        if (waitingPlayer === socket) {
-            waitingPlayer = null;
-        }
+        if (waitingPlayer === socket) waitingPlayer = null;
         let roomId = activeMatches[socket.id];
         if (roomId) {
             io.to(roomId).emit('opponent_disconnected');
             delete activeMatches[socket.id];
         }
-        console.log(`Joueur déconnecté : ${socket.id}`);
     });
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`Serveur démarré sur le port ${PORT}`);
-});
+server.listen(PORT, () => console.log(`Serveur actif sur le port ${PORT}`));
