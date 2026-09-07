@@ -2,7 +2,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
-const fs = require('fs');
+const { MongoClient } = require('mongodb');
 
 const app = express();
 const server = http.createServer(app);
@@ -11,50 +11,63 @@ const io = new Server(server);
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
 
-const USERS_FILE = path.join(__dirname, 'users.json');
+// Utilise la variable d'environnement de Render ou ton lien MongoDB Atlas en secours
+const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://isemlepro_db_user:GYKKE9eLQwd5uSS3@cluster0.snwld4m.mongodb.net/?retryWrites=true&w=majority";
+const DB_NAME = "foxgunbattle";
 
-function getUsers() {
+let db;
+
+// Connexion à MongoDB
+MongoClient.connect(MONGO_URI)
+    .then(client => {
+        db = client.db(DB_NAME);
+        console.log("Connecté avec succès à la base de données MongoDB !");
+        
+        const PORT = process.env.PORT || 3000;
+        server.listen(PORT, () => console.log(`Serveur actif sur le port ${PORT}`));
+    })
+    .catch(err => {
+        console.error("Erreur de connexion à MongoDB :", err);
+    });
+
+// Inscription
+app.post('/api/register', async (req, res) => {
     try {
-        if (!fs.existsSync(USERS_FILE)) {
-            fs.writeFileSync(USERS_FILE, JSON.stringify({}, null, 2));
-            return {};
+        const { username, password } = req.body;
+        if (!username || !password) return res.json({ success: false, message: "Champs vides !" });
+        
+        const usersCollection = db.collection('users');
+        const existingUser = await usersCollection.findOne({ username });
+
+        if (existingUser) {
+            return res.json({ success: false, message: "Ce pseudo existe déjà !" });
         }
-        const data = fs.readFileSync(USERS_FILE, 'utf8');
-        if (!data.trim()) return {};
-        return JSON.parse(data);
+
+        await usersCollection.insertOne({ username, password, wins: 0, losses: 0 });
+        res.json({ success: true, username });
     } catch (e) {
-        console.error("Erreur lecture users.json :", e);
-        return {};
+        console.error(e);
+        res.json({ success: false, message: "Erreur serveur lors de l'inscription." });
     }
-}
-
-function saveUsers(users) {
-    fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2));
-}
-
-app.post('/api/register', (req, res) => {
-    const { username, password } = req.body;
-    if (!username || !password) return res.json({ success: false, message: "Champs vides !" });
-    
-    let users = getUsers();
-    if (users[username]) {
-        return res.json({ success: false, message: "Ce pseudo existe déjà !" });
-    }
-
-    users[username] = { password, wins: 0, losses: 0 };
-    saveUsers(users);
-    res.json({ success: true, username });
 });
 
-app.post('/api/login', (req, res) => {
-    const { username, password } = req.body;
-    let users = getUsers();
-    
-    if (!users[username] || users[username].password !== password) {
-        return res.json({ success: false, message: "Pseudo ou mot de passe incorrect !" });
-    }
+// Connexion
+app.post('/api/login', async (req, res) => {
+    try {
+        const { username, password } = req.body;
+        const usersCollection = db.collection('users');
+        
+        const user = await usersCollection.findOne({ username });
 
-    res.json({ success: true, username });
+        if (!user || user.password !== password) {
+            return res.json({ success: false, message: "Pseudo ou mot de passe incorrect !" });
+        }
+
+        res.json({ success: true, username });
+    } catch (e) {
+        console.error(e);
+        res.json({ success: false, message: "Erreur serveur lors de la connexion." });
+    }
 });
 
 let waitingPlayer = null;
@@ -131,6 +144,3 @@ io.on('connection', (socket) => {
         delete playerHps[socket.id];
     });
 });
-
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Serveur actif sur le port ${PORT}`));
