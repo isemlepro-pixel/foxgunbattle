@@ -297,7 +297,6 @@
             let isGameOver = false;
             let matchStarted = false;
 
-            // Système de construction façon Fortnite
             let currentBuildMode = 'WEAPON'; // 'WEAPON', 'WALL', 'FLOOR', 'STAIR'
 
             camera.position.set(0, 2, 15);
@@ -408,13 +407,13 @@
                 }
             }
 
-            // GESTION DU CLIC POUR POSER LES STRUCTURES À BONNE DISTANCE (DISTANCE ÉLOIGNÉE)
+            // GESTION DU CLIC : LE MUR ET L'ESCALIER ONT EXACTEMENT LA MÊME STRUCTURE DE PLACEMENT ET DE COLLIDER
             window.addEventListener('mousedown', (e) => {
                 if (e.button !== 0 || document.pointerLockElement !== gameScreen || !matchStarted || isGameOver || isSettingsOpen) return;
 
                 let dir = new THREE.Vector3();
                 camera.getWorldDirection(dir);
-                dir.y = 0; // On garde à plat pour le placement horizontal
+                dir.y = 0; 
                 dir.normalize();
 
                 if (currentBuildMode === 'WEAPON') {
@@ -430,7 +429,6 @@
                     const wallGeo = new THREE.BoxGeometry(4, 3, 0.4);
                     const wallMatStruct = new THREE.MeshStandardMaterial({ color: 0xa0522d, roughness: 0.7 });
                     const builtWall = new THREE.Mesh(wallGeo, wallMatStruct);
-                    // Éloigné à 5 unités devant le joueur pour ne jamais le coller
                     builtWall.position.copy(camera.position).add(dir.clone().multiplyScalar(5));
                     builtWall.position.y = 1.5;
                     builtWall.rotation.y = camera.rotation.y;
@@ -447,39 +445,21 @@
                     colliders.push(builtFloor);
                 }
                 else if (currentBuildMode === 'STAIR') {
-                    // Escalier visuel type Fortnite
-                    const stairGroupStruct = new THREE.Group();
+                    // ESCALIER CONÇU COMME LE MUR : Même dimensions de base, mais incliné à 45°
+                    const stairGeo = new THREE.BoxGeometry(4, 3, 0.4);
+                    const stairMatStruct = new THREE.MeshStandardMaterial({ color: 0xd35400, roughness: 0.6 });
+                    const builtStair = new THREE.Mesh(stairGeo, stairMatStruct);
                     
-                    const rampMat = new THREE.MeshStandardMaterial({ color: 0xa0522d, roughness: 0.6 });
-                    const rampMesh = new THREE.Mesh(new THREE.BoxGeometry(4, 0.15, 4), rampMat);
-                    rampMesh.position.set(0, 1, 0);
-                    rampMesh.rotation.x = -Math.PI / 4;
-                    stairGroupStruct.add(rampMesh);
+                    // Placement rigoureusement identique au mur (à 5 unités devant, hauteur centrée à 1.5)
+                    builtStair.position.copy(camera.position).add(dir.clone().multiplyScalar(5));
+                    builtStair.position.y = 1.5;
+                    builtStair.rotation.y = camera.rotation.y;
+                    
+                    // Inclinaison de la boîte pour former une rampe d'escalier solide
+                    builtStair.rotation.x = Math.PI / 4; 
 
-                    for (let i = -1.5; i <= 1.5; i += 1.0) {
-                        const plank = new THREE.Mesh(new THREE.BoxGeometry(4.1, 0.1, 0.3), new THREE.MeshStandardMaterial({ color: 0x8b4513 }));
-                        plank.position.set(0, 0.4 + (i + 1.5) * 0.5, 1.5 - (i + 1.5) * 0.5);
-                        plank.rotation.x = -Math.PI / 4;
-                        stairGroupStruct.add(plank);
-                    }
-
-                    // Éloigné de 5 unités devant pour éviter qu'il n'apparaisse sur le joueur
-                    let spawnPos = camera.position.clone().add(dir.clone().multiplyScalar(5));
-                    spawnPos.y = 0;
-                    stairGroupStruct.position.copy(spawnPos);
-                    stairGroupStruct.rotation.y = camera.rotation.y;
-                    scene.add(stairGroupStruct);
-
-                    // COLLIDER SOLIDE ET INCLINÉ POUR L'ESCALIER : Bloque les tirs et permet de monter dessus sans traverser
-                    const stairCollider = new THREE.Mesh(
-                        new THREE.BoxGeometry(3.8, 1.8, 3.8),
-                        new THREE.MeshBasicMaterial({ visible: false })
-                    );
-                    stairCollider.position.copy(spawnPos);
-                    stairCollider.position.y = 0.9; // Position ajustée pour couvrir toute la hauteur de la rampe
-                    stairCollider.rotation.y = camera.rotation.y;
-                    scene.add(stairCollider);
-                    colliders.push(stairCollider);
+                    scene.add(builtStair);
+                    colliders.push(builtStair); // Sert à la fois de visuel et de collider parfait comme le mur
                 }
             });
 
