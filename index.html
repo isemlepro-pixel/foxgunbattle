@@ -408,8 +408,7 @@
                 }
             }
 
-            // CORRECTION MAJEURE : Escalier plat et incliné comme sur l'image (Rampe en bois) 
-            // et SUPPRESSION de son intégration dans les colliders (ou utilisation d'une bounding box large/rampe basse) pour éviter de bloquer les mouvements du joueur !
+            // GESTION DU CLIC POUR POSER LES STRUCTURES ET LES COLLIDERS ASSOCIÉS
             window.addEventListener('mousedown', (e) => {
                 if (e.button !== 0 || document.pointerLockElement !== gameScreen || !matchStarted || isGameOver || isSettingsOpen) return;
 
@@ -443,17 +442,15 @@
                     colliders.push(builtFloor);
                 }
                 else if (currentBuildMode === 'STAIR') {
-                    // RAMPE INCLINÉE EXACTEMENT COMME SUR L'IMAGE DE FORTNITE (Bois texturé/couleur bois brun)
+                    // Groupe visuel de l'escalier ( rampe bois texturée comme sur l'image )
                     const stairGroupStruct = new THREE.Group();
                     
-                    // Plaque principale inclinée de la rampe
                     const rampMat = new THREE.MeshStandardMaterial({ color: 0xa0522d, roughness: 0.6 });
                     const rampMesh = new THREE.Mesh(new THREE.BoxGeometry(4, 0.15, 4), rampMat);
                     rampMesh.position.set(0, 1, 0);
-                    rampMesh.rotation.x = -Math.PI / 4; // Inclinaison de la rampe
+                    rampMesh.rotation.x = -Math.PI / 4;
                     stairGroupStruct.add(rampMesh);
 
-                    // Traverses en bois horizontales sur la rampe (comme sur l'image de référence)
                     for (let i = -1.5; i <= 1.5; i += 1.0) {
                         const plank = new THREE.Mesh(new THREE.BoxGeometry(4.1, 0.1, 0.3), new THREE.MeshStandardMaterial({ color: 0x8b4513 }));
                         plank.position.set(0, 0.4 + (i + 1.5) * 0.5, 1.5 - (i + 1.5) * 0.5);
@@ -461,12 +458,22 @@
                         stairGroupStruct.add(plank);
                     }
 
-                    stairGroupStruct.position.copy(camera.position).add(dir.clone().multiplyScalar(3));
-                    stairGroupStruct.position.y = 0;
+                    let spawnPos = camera.position.clone().add(dir.clone().multiplyScalar(3));
+                    spawnPos.y = 0;
+                    stairGroupStruct.position.copy(spawnPos);
                     stairGroupStruct.rotation.y = camera.rotation.y;
                     scene.add(stairGroupStruct);
-                    
-                    // PAS DE COLLIDER BLOQUANT STRICT POUR L'ESCALIER : On ne l'ajoute pas dans colliders pour ne pas bloquer les déplacements du joueur !
+
+                    // AJOUT D'UN COLLIDER INCLINÉ SÉCURISÉ POUR BLOQUER LES BALLES ET PERMETTRE DE MONTER SANS SE BLOQUER
+                    const colliderBox = new THREE.Mesh(
+                        new THREE.BoxGeometry(4, 2.5, 4),
+                        new THREE.MeshBasicMaterial({ visible: false }) // Invisible pour le joueur mais bloque les tirs et sert de repère de collision
+                    );
+                    colliderBox.position.copy(spawnPos);
+                    colliderBox.position.y = 1.0;
+                    colliderBox.rotation.y = camera.rotation.y;
+                    scene.add(colliderBox);
+                    colliders.push(colliderBox);
                 }
             });
 
@@ -507,7 +514,7 @@
                     let canMove = true;
                     for (let obj of colliders) {
                         let box = new THREE.Box3().setFromObject(obj);
-                        box.expandByScalar(0.4);
+                        box.expandByScalar(0.2);
                         if (box.containsPoint(nextPos)) {
                             canMove = false;
                             break;
@@ -531,7 +538,7 @@
 
                         for (let obj of colliders) {
                             let box = new THREE.Box3().setFromObject(obj);
-                            box.expandByScalar(0.6);
+                            box.expandByScalar(0.4);
                             if (box.containsPoint(nextBotPos)) {
                                 botCanMove = false;
                                 break;
@@ -606,7 +613,7 @@
                             return;
                         }
 
-                        if (bb.position.distanceType ? false : bb.position.distanceTo(camera.position) < 1.5) {
+                        if (bb.position.distanceTo(camera.position) < 1.5) {
                             playerHP -= 15;
                             document.getElementById('player-hp').style.width = Math.max(0, playerHP) + '%';
 
@@ -620,7 +627,7 @@
                                 isGameOver = true;
                                 document.exitPointerLock();
                                 clearInterval(botShootInterval);
-                                document.getElementById('defeat-screen').classList.add('image') ? null : document.getElementById('defeat-screen').classList.add('active');
+                                document.getElementById('defeat-screen').classList.add('active');
                             }
                         }
                     });
