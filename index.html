@@ -273,17 +273,7 @@
             scene.add(wall4);
             colliders.push(wall4);
 
-            // Escalier initial
-            const stairGroup = new THREE.Group();
-            const stepMat = new THREE.MeshStandardMaterial({ color: 0x0f3460, roughness: 0.5 });
-            const numSteps = 8;
-            for (let i = 0; i < numSteps; i++) {
-                const step = new THREE.Mesh(new THREE.BoxGeometry(5, 0.5 + (i * 0.4), 1.2), stepMat);
-                step.position.set(0, (0.5 + (i * 0.4)) / 2, -10 - (i * 1.1));
-                stairGroup.add(step);
-                colliders.push(step);
-            }
-            scene.add(stairGroup);
+            // SUPPRESSION DE L'ANCIEN ESCALIER DE DÉPART QUI BLOQUAIT LE BOT
 
             // --- CRÉATION DU BOT (ADVERSAIRE VISIBLE) ---
             const enemyGroup = new THREE.Group();
@@ -309,7 +299,7 @@
             let isGameOver = false;
             let matchStarted = false;
 
-            // Système de construction façon Fortnite (F = Mur, G = Sol, V = Escalier, Arme par défaut)
+            // Système de construction façon Fortnite
             let currentBuildMode = 'WEAPON'; // 'WEAPON', 'WALL', 'FLOOR', 'STAIR'
 
             camera.position.set(0, 2, 15);
@@ -336,7 +326,6 @@
             let yaw = 0;
             let pitch = 0;
 
-            // VERROUILLAGE DE LA SOURIS CORRIGÉ (clic n'importe où sur l'écran de jeu)
             gameScreen.onmousedown = (e) => { 
                 if (!isGameOver && matchStarted && !isSettingsOpen) {
                     if (document.pointerLockElement !== gameScreen) {
@@ -364,7 +353,6 @@
             const botBulletGeo = new THREE.SphereGeometry(0.25, 8, 8);
             const botBulletMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
 
-            // GESTION DES CLICS (TIR OU CONSTRUCTION) ET CHANGEMENT DE MODE (F, G, V)
             window.onkeydown = (e) => {
                 let key = e.key.toLowerCase();
                 
@@ -375,7 +363,6 @@
 
                 if (!matchStarted || isGameOver || isSettingsOpen) return;
 
-                // Sélection des modes de construction façon Fortnite
                 if (key === 'f') {
                     currentBuildMode = (currentBuildMode === 'WALL') ? 'WEAPON' : 'WALL';
                     updateBuildHUD();
@@ -417,7 +404,7 @@
                 }
             }
 
-            // CLIC GAUCHE : TIRER OU POSER UNE STRUCTURE
+            // CLIC GAUCHE : TIRER OU POSER UNE VRAIE STRUCTURE 3D INCLINÉE EN ESCALIER
             window.addEventListener('mousedown', (e) => {
                 if (e.button !== 0 || document.pointerLockElement !== gameScreen || !matchStarted || isGameOver || isSettingsOpen) return;
 
@@ -425,7 +412,6 @@
                 camera.getWorldDirection(dir);
 
                 if (currentBuildMode === 'WEAPON') {
-                    // Tirer
                     let bullet = new THREE.Mesh(bulletGeo, bulletMat);
                     bullet.position.copy(camera.position);
                     bullet.velocity = dir.clone().multiplyScalar(chosenWeapon.speed);
@@ -433,7 +419,6 @@
                     bullets.push(bullet);
                 } 
                 else if (currentBuildMode === 'WALL') {
-                    // Poser un mur
                     const wallGeo = new THREE.BoxGeometry(4, 3, 0.4);
                     const wallMatStruct = new THREE.MeshStandardMaterial({ color: 0xa0522d, roughness: 0.7 });
                     const builtWall = new THREE.Mesh(wallGeo, wallMatStruct);
@@ -444,7 +429,6 @@
                     colliders.push(builtWall);
                 }
                 else if (currentBuildMode === 'FLOOR') {
-                    // Poser un sol plat
                     const floorGeo = new THREE.BoxGeometry(4, 0.2, 4);
                     const floorMatStruct = new THREE.MeshStandardMaterial({ color: 0x3498db, roughness: 0.6 });
                     const builtFloor = new THREE.Mesh(floorGeo, floorMatStruct);
@@ -454,15 +438,20 @@
                     colliders.push(builtFloor);
                 }
                 else if (currentBuildMode === 'STAIR') {
-                    // Poser un escalier
-                    const stairGeo = new THREE.BoxGeometry(4, 1.5, 3);
+                    // SOLUTION : VRAI ESCALIER INCLINÉ FAÇON FORTNITE
+                    const stairGroupStruct = new THREE.Group();
                     const stairMatStruct = new THREE.MeshStandardMaterial({ color: 0x2ecc71, roughness: 0.5 });
-                    const builtStair = new THREE.Mesh(stairGeo, stairMatStruct);
-                    builtStair.position.copy(camera.position).add(dir.clone().multiplyScalar(3));
-                    builtStair.position.y = 0.75;
-                    builtStair.rotation.y = camera.rotation.y;
-                    scene.add(builtStair);
-                    colliders.push(builtStair);
+                    const numSteps = 5;
+                    for (let i = 0; i < numSteps; i++) {
+                        const step = new THREE.Mesh(new THREE.BoxGeometry(4, 0.4, 0.8), stairMatStruct);
+                        step.position.set(0, i * 0.4, (i * 0.8) - 1.5);
+                        stairGroupStruct.add(step);
+                        colliders.push(step);
+                    }
+                    stairGroupStruct.position.copy(camera.position).add(dir.clone().multiplyScalar(3));
+                    stairGroupStruct.position.y = 0;
+                    stairGroupStruct.rotation.y = camera.rotation.y;
+                    scene.add(stairGroupStruct);
                 }
             });
 
@@ -502,7 +491,6 @@
                     if (keys['q']) nextPos.addScaledVector(sideDir, speed);
                     if (keys['d']) nextPos.addScaledVector(sideDir, -speed);
 
-                    // COLLISION JOUEUR
                     let canMove = true;
                     for (let obj of colliders) {
                         let box = new THREE.Box3().setFromObject(obj);
@@ -520,7 +508,6 @@
                     camera.position.x = Math.max(-28, Math.min(28, camera.position.x));
                     camera.position.z = Math.max(-28, Math.min(28, camera.position.z));
 
-                    // DÉPLACEMENT DU BOT AVEC COLLISION ANTI-TRAVERSÉE
                     if (enemyHP > 0) {
                         let botDir = new THREE.Vector3().subVectors(camera.position, enemyGroup.position);
                         botDir.y = 0;
@@ -544,7 +531,6 @@
                         enemyGroup.lookAt(camera.position.x, enemyGroup.position.y, camera.position.z);
                     }
 
-                    // TIRS JOUEUR
                     bullets.forEach((b, index) => {
                         b.position.add(b.velocity);
 
@@ -589,13 +575,12 @@
                         }
                     });
 
-                    // TIRS DU BOT
                     botBullets.forEach((bb, index) => {
                         bb.position.add(bb.velocity);
 
                         let botBulletHit = false;
                         for (let obj of colliders) {
-                            let box = new THREE.Box3().setFromObject(obj);
+                            let box = new THREE.Box3().setFromObject(box = new THREE.Box3().setFromObject(obj));
                             if (box.containsPoint(bb.position)) {
                                 botBulletHit = true;
                                 break;
