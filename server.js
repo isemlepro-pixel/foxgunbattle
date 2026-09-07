@@ -8,7 +8,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// Configuration MongoDB Atlas (récupérée depuis les variables d'environnement Render ou valeur par défaut)
+// Configuration MongoDB Atlas
 const mongoUri = process.env.MONGO_URI || "mongodb+srv://isemlepro_db_user:MonMotDePasse123@cluster0.snwld4m.mongodb.net/?retryWrites=true&w=majority";
 const dbName = "foxgunbattle"; // Nom de ta base de données
 
@@ -25,8 +25,8 @@ MongoClient.connect(mongoUri)
     console.error("Erreur de connexion à MongoDB :", err);
   });
 
-// Servir les fichiers statiques du dossier public
-app.use(express.static(path.join(__dirname, 'public')));
+// Servir les fichiers statiques directement depuis la racine (là où se trouve ton index.html)
+app.use(express.static(__dirname));
 app.use(express.json());
 
 // Routes pour l'authentification et les comptes
@@ -76,7 +76,7 @@ io.on('connection', (socket) => {
             bot: { id: 'bot_1', x: 5, y: 0, z: 5, health: 100 }
         };
 
-        // Boucle de mise à jour du bot (IA simple) toutes les 50 millisecondes
+        // Boucle de mise à jour du bot (IA simple qui se rapproche du joueur) toutes les 50ms
         const botInterval = setInterval(() => {
             const game = activeGames[socket.id];
             if (!game) {
@@ -84,7 +84,7 @@ io.on('connection', (socket) => {
                 return;
             }
 
-            // Simple logique : le bot se rapproche un peu du joueur
+            // Logique de déplacement du bot vers le joueur
             if (game.bot.x < game.player.x) game.bot.x += 0.1;
             if (game.bot.x > game.player.x) game.bot.x -= 0.1;
             if (game.bot.z < game.player.z) game.bot.z += 0.1;
@@ -104,11 +104,11 @@ io.on('connection', (socket) => {
             }
         });
 
-        // Gestion de la déconnexion ou de la fin de partie
+        // Gestion de la déconnexion en pleine partie bot
         socket.on('disconnect', () => {
             clearInterval(botInterval);
             delete activeGames[socket.id];
-            console.log(`Partie fermée pour le joueur : ${socket.id}`);
+            console.log(`Partie bot fermée pour le joueur : ${socket.id}`);
         });
     });
 
