@@ -16,10 +16,14 @@ const USERS_FILE = path.join(__dirname, 'users.json');
 function getUsers() {
     try {
         if (!fs.existsSync(USERS_FILE)) {
-            fs.writeFileSync(USERS_FILE, JSON.stringify({}));
+            fs.writeFileSync(USERS_FILE, JSON.stringify({}, null, 2));
+            return {};
         }
-        return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
+        const data = fs.readFileSync(USERS_FILE, 'utf8');
+        if (!data.trim()) return {};
+        return JSON.parse(data);
     } catch (e) {
+        console.error("Erreur lecture users.json :", e);
         return {};
     }
 }
@@ -55,7 +59,7 @@ app.post('/api/login', (req, res) => {
 
 let waitingPlayer = null;
 let activeMatches = {};
-let playerHps = {}; // Suit les PV des joueurs en direct
+let playerHps = {};
 
 io.on('connection', (socket) => {
     console.log(`Joueur connecté : ${socket.id}`);
@@ -97,18 +101,14 @@ io.on('connection', (socket) => {
     socket.on('player_attack', (data) => {
         let roomId = activeMatches[socket.id];
         if (roomId) {
-            // Trouve l'adversaire dans la même room
             let socketsInRoom = io.sockets.adapter.rooms.get(roomId);
             if (socketsInRoom) {
                 for (let socketId of socketsInRoom) {
                     if (socketId !== socket.id) {
-                        // Inflige les dégâts à l'adversaire
                         playerHps[socketId] = (playerHps[socketId] || 100) - data.damage;
                         let currentHp = playerHps[socketId];
 
-                        // Envoie ses nouveaux PV à l'adversaire
                         io.to(socketId).emit('take_damage', { damage: data.damage });
-                        // Informe le tireur de l'impact et des PV restants de l'ennemi
                         socket.emit('hit_confirmed', { remainingHp: currentHp });
 
                         if (currentHp <= 0) {
