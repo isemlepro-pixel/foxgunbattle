@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FoxGunBattle - 3D FPS</title>
+    <title>FoxGunBattle - 3D FPS En Ligne</title>
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
@@ -54,10 +54,10 @@
     <div id="main-menu" class="screen active">
         <div class="container">
             <h1>FoxGunBattle</h1>
-            <p style="color: #ccc; margin-bottom: 20px;">Mode FPS 3D En Ligne</p>
+            <p style="color: #ccc; margin-bottom: 20px;">Mode FPS 3D En Ligne (1V1)</p>
             
             <button onclick="showScreen('weapon-screen')" style="background: #16213e; border: 1px solid #e94560;">Choisir l'arme/outil (Actif : <span id="current-weapon-label">Fusil d'Assaut</span>)</button>
-            <button onclick="startMatchmaking()">Jouer en 3D (1V1)</button>
+            <button onclick="startMatchmaking()">Jouer en Ligne</button>
             <button onclick="showScreen('settings-screen')" style="background: #16213e; border: 1px solid #aaa;">Paramètres</button>
         </div>
     </div>
@@ -75,7 +75,7 @@
             </div>
             <div class="weapon-card" id="card-Sniper" onclick="equipWeapon('Sniper', 'Sniper Lourd', 50, 0.4)">
                 <h3>Sniper Lourd</h3>
-                <p style="color:#aaa; font-size:0.9rem;">Lent - Très gros dégâts (2 tirs)</p>
+                <p style="color:#aaa; font-size:0.9rem;">Lent - Très gros dégâts</p>
             </div>
             <div class="weapon-card" id="card-SMG" onclick="equipWeapon('SMG', 'Mitraillette', 12, 1.2)">
                 <h3>Mitraillette</h3>
@@ -100,7 +100,7 @@
         <div class="container">
             <h1>Recherche...</h1>
             <div class="loader"></div>
-            <p id="matchmaking-status">Recherche d'un adversaire 3D...</p>
+            <p id="matchmaking-status">En attente d'un vrai adversaire sur le serveur...</p>
             <button class="back-btn" style="position:relative; top:0; left:0;" onclick="cancelMatchmaking()">Annuler</button>
         </div>
     </div>
@@ -152,14 +152,13 @@
     <div id="defeat-screen" class="screen">
         <div class="container" style="border-color: #e94560;">
             <h1 style="color: #e94560;">DÉFAITE...</h1>
-            <p id="defeat-message" style="color: #ccc; margin-bottom: 20px;">Le bot vous a éliminé !</p>
+            <p id="defeat-message" style="color: #ccc; margin-bottom: 20px;">Votre adversaire vous a éliminé !</p>
             <button onclick="location.reload()">Réessayer</button>
         </div>
     </div>
 
     <script>
         const socket = io();
-        let matchmakingTimer;
         let mouseSensitivity = 0.005;
         let chosenWeapon = { id: 'Rifle', name: "Fusil d'Assaut", damage: 20, speed: 0.9 };
         let lastGunWeapon = { id: 'Rifle', name: "Fusil d'Assaut", damage: 20, speed: 0.9 };
@@ -201,52 +200,40 @@
 
         function openInGameSettings() {
             isSettingsOpen = true;
-            document.exitPointerLock();
+            try { document.exitPointerLock(); } catch(e){}
             document.getElementById('in-game-settings-modal').classList.add('active');
         }
 
         function closeInGameSettings() {
             isSettingsOpen = false;
             document.getElementById('in-game-settings-modal').classList.remove('active');
-            document.getElementById('game-screen').requestPointerLock();
+            try { document.getElementById('game-screen').requestPointerLock(); } catch(e){}
         }
 
         function startMatchmaking() {
             showScreen('matchmaking-screen');
-            document.getElementById('matchmaking-status').innerText = "Recherche d'un vrai adversaire 3D...";
-            
-            // On prévient le serveur qu'on cherche un joueur
+            document.getElementById('matchmaking-status').innerText = "Recherche d'un vrai adversaire en ligne...";
+            // Connexion au serveur pour trouver un joueur (plus de bot local)
             socket.emit('find_match');
-
-            // TIMER DE SECOURS : Si au bout de 5 secondes aucun vrai joueur n'a rejoint, on lance un bot !
-            matchmakingTimer = setTimeout(() => {
-                opponentNameGlobal = "Bot Entraînement";
-                document.getElementById('enemy-name').innerText = opponentNameGlobal;
-                document.getElementById('defeat-message').innerText = "Le bot vous a éliminé !";
-                isInGame = true;
-                showScreen('game-screen');
-                init3DGame();
-            }, 5000);
         }
 
         function cancelMatchmaking() {
-            clearTimeout(matchmakingTimer);
-            socket.emit('cancel_match');
-            showScreen('main-menu');
+            location.reload();
         }
 
-        // Si le serveur trouve un vrai joueur à temps, on annule le timer du bot et on lance le vrai match
-        socket.on('match_found', (data) => {
-            clearTimeout(matchmakingTimer);
-            opponentNameGlobal = data.opponent || "Adversaire En Ligne";
-            document.getElementById('enemy-name').innerText = opponentNameGlobal;
-            document.getElementById('defeat-message').innerText = "Votre adversaire vous a éliminé !";
-            isInGame = true;
-            showScreen('game-screen');
-            init3DGame();
+        socket.on('waiting_for_opponent', () => {
+            document.getElementById('matchmaking-status').innerText = "En attente d'un deuxième joueur... (Ouvre un 2e onglet !)";
         });
 
-        function init3DGame() {
+        socket.on('match_found', (data) => {
+            opponentNameGlobal = data.opponent || "Adversaire En Ligne";
+            document.getElementById('enemy-name').innerText = opponentNameGlobal;
+            isInGame = true;
+            showScreen('game-screen');
+            init3DGame(data.role);
+        });
+
+        function init3DGame(role) {
             const scene = new THREE.Scene();
             scene.background = new THREE.Color(0x0f0f1a);
 
@@ -308,7 +295,7 @@
             scene.add(wall4);
             colliders.push(wall4);
 
-            // ENNEMI (BOT)
+            // ADVERSAIRE EN LIGNE (AVATAR)
             const enemyGroup = new THREE.Group();
             const torso = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2, 0.6), new THREE.MeshStandardMaterial({ color: 0xff476f }));
             torso.position.y = 1;
@@ -316,7 +303,6 @@
             const head = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.8), new THREE.MeshStandardMaterial({ color: 0xffccaa }));
             head.position.y = 2.3;
             enemyGroup.add(head);
-            enemyGroup.position.set(0, 0, -20);
             scene.add(enemyGroup);
 
             const weaponGeo = new THREE.BoxGeometry(0.3, 0.3, 1.2);
@@ -326,14 +312,20 @@
             camera.add(playerWeapon);
             scene.add(camera);
 
+            // Position de départ selon le rôle attribué par le serveur
+            if (role === 'p1') {
+                camera.position.set(0, 2, 20);
+                enemyGroup.position.set(0, 0, -20);
+            } else {
+                camera.position.set(0, 2, -20);
+                enemyGroup.position.set(0, 0, 20);
+            }
+
             let enemyHP = 100;
             let playerHP = 100;
-            let botSpeed = 0.035;
             let isGameOver = false;
             let matchStarted = false;
             let currentBuildMode = 'WEAPON'; 
-
-            camera.position.set(0, 2, 15);
 
             let countdownEl = document.getElementById('countdown-overlay');
             countdownEl.classList.add('active');
@@ -360,7 +352,7 @@
             window.addEventListener('click', () => {
                 if (!isGameOver && matchStarted && !isSettingsOpen) {
                     if (document.pointerLockElement !== gameScreen) {
-                        gameScreen.requestPointerLock();
+                        try { gameScreen.requestPointerLock(); } catch(e){}
                     }
                 }
             });
@@ -373,22 +365,36 @@
                     camera.rotation.order = 'YXZ';
                     camera.rotation.y = yaw;
                     camera.rotation.x = pitch;
+
+                    // Envoi de la position au serveur
+                    socket.emit('player_move', {
+                        x: camera.position.x,
+                        y: camera.position.y,
+                        z: camera.position.z,
+                        rotationY: yaw
+                    });
                 }
             };
+
+            // Réception des mouvements de l'adversaire
+            socket.on('opponent_move', (data) => {
+                enemyGroup.position.set(data.x, data.y - 2, data.z);
+                enemyGroup.rotation.y = data.rotationY;
+            });
+
+            socket.on('opponent_disconnected', () => {
+                alert("L'adversaire s'est déconnecté !");
+                location.reload();
+            });
 
             let bullets = [];
             const bulletGeo = new THREE.SphereGeometry(0.2, 8, 8);
             const bulletMat = new THREE.MeshBasicMaterial({ color: 0xffcc00 });
 
-            let botBullets = [];
-            const botBulletGeo = new THREE.SphereGeometry(0.25, 8, 8);
-            const botBulletMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-
             let keys = {};
 
             window.onkeydown = (e) => {
                 let key = e.key.toLowerCase();
-                
                 if (key === 'z' || key === 'w') keys['z'] = true;
                 if (key === 's') keys['s'] = true;
                 if (key === 'q' || key === 'a') keys['q'] = true;
@@ -480,32 +486,8 @@
 
                     if (chosenWeapon.id === 'Pickaxe') {
                         if (camera.position.distanceTo(enemyGroup.position) < 4) {
-                            enemyHP -= chosenWeapon.damage;
-                            document.getElementById('enemy-hp').style.width = Math.max(0, enemyHP) + '%';
-                            torso.material.color.setHex(0xffffff);
-                            setTimeout(() => torso.material.color.setHex(0xff476f), 100);
-
-                            if (enemyHP <= 0) {
-                                isGameOver = true;
-                                isInGame = false;
-                                clearInterval(botShootInterval);
-                                scene.remove(enemyGroup);
-                                document.exitPointerLock();
-                                setTimeout(() => { document.getElementById('victory-screen').classList.add('active'); }, 300);
-                            }
-                        }
-
-                        for (let i = customBuilds.length - 1; i >= 0; i--) {
-                            let buildObj = customBuilds[i];
-                            if (camera.position.distanceTo(buildObj.position) < 5) {
-                                scene.remove(buildObj);
-                                let idxRamp = ramps.indexOf(buildObj);
-                                if (idxRamp > -1) ramps.splice(idxRamp, 1);
-                                let idxColl = colliders.indexOf(buildObj);
-                                if (idxColl > -1) colliders.splice(idxColl, 1);
-                                customBuilds.splice(i, 1);
-                                break;
-                            }
+                            // Envoi des dégâts au serveur
+                            socket.emit('player_attack', { damage: chosenWeapon.damage });
                         }
                     } else {
                         let bullet = new THREE.Mesh(bulletGeo, bulletMat);
@@ -515,16 +497,23 @@
                         bullet.velocity = exactDir.clone().multiplyScalar(chosenWeapon.speed);
                         scene.add(bullet);
                         bullets.push(bullet);
+
+                        socket.emit('player_shoot', {
+                            x: bullet.position.x,
+                            y: bullet.position.y,
+                            z: bullet.position.z,
+                            vx: bullet.velocity.x,
+                            vy: bullet.velocity.y,
+                            vz: bullet.velocity.z,
+                            damage: chosenWeapon.damage
+                        });
                     }
                 } 
                 else if (currentBuildMode === 'WALL') {
                     const wallGeo = new THREE.BoxGeometry(4, 3, 0.4);
-                    const wallMatStruct = new THREE.MeshStandardMaterial({ color: 0xa0522d, roughness: 0.7 });
-                    const builtWall = new THREE.Mesh(wallGeo, wallMatStruct);
-                    
+                    const builtWall = new THREE.Mesh(wallGeo, new THREE.MeshStandardMaterial({ color: 0xa0522d, roughness: 0.7 }));
                     let spawnPos = camera.position.clone().add(dir.clone().multiplyScalar(4));
                     spawnPos.y = Math.floor(camera.position.y / 2) * 2 + 1.5;
-
                     builtWall.position.copy(spawnPos);
                     builtWall.rotation.y = camera.rotation.y;
                     scene.add(builtWall);
@@ -533,12 +522,9 @@
                 }
                 else if (currentBuildMode === 'FLOOR') {
                     const floorGeo = new THREE.BoxGeometry(4, 0.2, 4);
-                    const floorMatStruct = new THREE.MeshStandardMaterial({ color: 0x3498db, roughness: 0.6 });
-                    const builtFloor = new THREE.Mesh(floorGeo, floorMatStruct);
-                    
+                    const builtFloor = new THREE.Mesh(floorGeo, new THREE.MeshStandardMaterial({ color: 0x3498db, roughness: 0.6 }));
                     let spawnPos = camera.position.clone().add(dir.clone().multiplyScalar(4));
                     spawnPos.y = Math.floor(camera.position.y / 2) * 2;
-                    
                     builtFloor.position.copy(spawnPos);
                     scene.add(builtFloor);
                     ramps.push(builtFloor);
@@ -546,36 +532,41 @@
                 }
                 else if (currentBuildMode === 'STAIR') {
                     const stairGeo = new THREE.BoxGeometry(4, 0.2, 4);
-                    const stairMatStruct = new THREE.MeshStandardMaterial({ color: 0x2ecc71, roughness: 0.6 });
-                    const builtStair = new THREE.Mesh(stairGeo, stairMatStruct);
-
+                    const builtStair = new THREE.Mesh(stairGeo, new THREE.MeshStandardMaterial({ color: 0x2ecc71, roughness: 0.6 }));
                     let spawnPos = camera.position.clone().add(dir.clone().multiplyScalar(4));
                     spawnPos.y = Math.max(1.0, Math.floor(camera.position.y / 2) * 2); 
-                    
                     builtStair.position.copy(spawnPos);
                     builtStair.rotation.y = camera.rotation.y;
                     builtStair.rotation.x = Math.PI / 5; 
-
                     scene.add(builtStair);
                     ramps.push(builtStair);
                     customBuilds.push(builtStair);
                 }
             });
 
-            let botShootInterval = setInterval(() => {
-                if (isGameOver || enemyHP <= 0 || !matchStarted || isSettingsOpen) return;
+            // Écoute des dégâts reçus de l'adversaire
+            socket.on('take_damage', (data) => {
+                playerHP -= data.damage;
+                document.getElementById('player-hp').style.width = Math.max(0, playerHP) + '%';
+                document.body.style.backgroundColor = "#5a1818";
+                setTimeout(() => document.body.style.backgroundColor = "#0f0f1a", 100);
 
-                let botBullet = new THREE.Mesh(botBulletGeo, botBulletMat);
-                botBullet.position.copy(enemyGroup.position);
-                botBullet.position.y += 1.5;
+                if (playerHP <= 0 && !isGameOver) {
+                    isGameOver = true;
+                    isInGame = false;
+                    try { document.exitPointerLock(); } catch(e){}
+                    document.getElementById('defeat-screen').classList.add('active');
+                }
+            });
 
-                let dirToPlayer = new THREE.Vector3().subVectors(camera.position, enemyGroup.position);
-                dirToPlayer.normalize();
-                botBullet.velocity = dirToPlayer.multiplyScalar(0.6);
-
-                scene.add(botBullet);
-                botBullets.push(botBullet);
-            }, 1000);
+            socket.on('match_won', () => {
+                if (!isGameOver) {
+                    isGameOver = true;
+                    isInGame = false;
+                    try { document.exitPointerLock(); } catch(e){}
+                    document.getElementById('victory-screen').classList.add('active');
+                }
+            });
 
             function animate() {
                 if (isGameOver) return;
@@ -587,14 +578,14 @@
                     camera.getWorldDirection(dir);
                     dir.y = 0;
                     dir.normalize();
-
                     let sideDir = new THREE.Vector3(dir.z, 0, -dir.x);
 
                     let nextPos = camera.position.clone();
-                    if (keys['z']) nextPos.addScaledVector(dir, speed);
-                    if (keys['s']) nextPos.addScaledVector(dir, -speed);
-                    if (keys['q']) nextPos.addScaledVector(sideDir, speed);
-                    if (keys['d']) nextPos.addScaledVector(sideDir, -speed);
+                    let moved = false;
+                    if (keys['z']) { nextPos.addScaledVector(dir, speed); moved = true; }
+                    if (keys['s']) { nextPos.addScaledVector(dir, -speed); moved = true; }
+                    if (keys['q']) { nextPos.addScaledVector(sideDir, speed); moved = true; }
+                    if (keys['d']) { nextPos.addScaledVector(sideDir, -speed); moved = true; }
 
                     let targetY = 2; 
                     for (let ramp of ramps) {
@@ -602,9 +593,7 @@
                         if (nextPos.x >= box.min.x - 0.5 && nextPos.x <= box.max.x + 0.5 && 
                             nextPos.z >= box.min.z - 0.5 && nextPos.z <= box.max.z + 0.5) {
                             let calculatedY = ramp.position.y + 2.0;
-                            if (calculatedY > targetY) {
-                                targetY = calculatedY;
-                            }
+                            if (calculatedY > targetY) targetY = calculatedY;
                         }
                     }
                     nextPos.y = targetY;
@@ -626,107 +615,24 @@
                     camera.position.x = Math.max(-28, Math.min(28, camera.position.x));
                     camera.position.z = Math.max(-28, Math.min(28, camera.position.z));
 
-                    if (enemyHP > 0) {
-                        let botDir = new THREE.Vector3().subVectors(camera.position, enemyGroup.position);
-                        botDir.y = 0;
-                        botDir.normalize();
-                        
-                        let nextBotPos = enemyGroup.position.clone().addScaledVector(botDir, botSpeed);
-                        let botCanMove = true;
-
-                        for (let obj of colliders) {
-                            let box = new THREE.Box3().setFromObject(obj);
-                            box.expandByScalar(0.2);
-                            if (box.containsPoint(nextBotPos)) {
-                                botCanMove = false;
-                                break;
-                            }
-                        }
-
-                        if (botCanMove) {
-                            enemyGroup.position.copy(nextBotPos);
-                        }
-                        enemyGroup.lookAt(camera.position.x, enemyGroup.position.y, camera.position.z);
+                    if (moved) {
+                        socket.emit('player_move', {
+                            x: camera.position.x,
+                            y: camera.position.y,
+                            z: camera.position.z,
+                            rotationY: yaw
+                        });
                     }
 
                     bullets.forEach((b, index) => {
                         b.position.add(b.velocity);
-
-                        let bulletHit = false;
-                        for (let obj of colliders) {
-                            let box = new THREE.Box3().setFromObject(obj);
-                            if (box.containsPoint(b.position)) {
-                                bulletHit = true;
-                                break;
-                            }
-                        }
-
-                        if (bulletHit) {
+                        if (b.position.distanceTo(enemyGroup.position) < 2) {
+                            socket.emit('player_attack', { damage: chosenWeapon.damage });
                             scene.remove(b);
                             bullets.splice(index, 1);
-                            return;
-                        }
-
-                        if (enemyHP > 0 && b.position.distanceTo(enemyGroup.position) < 2) {
-                            enemyHP -= chosenWeapon.damage;
-                            document.getElementById('enemy-hp').style.width = Math.max(0, enemyHP) + '%';
-
-                            torso.material.color.setHex(0xffffff);
-                            setTimeout(() => torso.material.color.setHex(0xff476f), 100);
-
+                        } else if (b.position.distanceTo(camera.position) > 50) {
                             scene.remove(b);
                             bullets.splice(index, 1);
-
-                            if (enemyHP <= 0) {
-                                isGameOver = true;
-                                isInGame = false;
-                                clearInterval(botShootInterval);
-                                scene.remove(enemyGroup);
-                                document.exitPointerLock();
-                                setTimeout(() => { document.getElementById('victory-screen').classList.add('active'); }, 300);
-                            }
-                        } 
-                        else if (b.position.distanceTo(camera.position) > 50) {
-                            scene.remove(b);
-                            bullets.splice(index, 1);
-                        }
-                    });
-
-                    botBullets.forEach((bb, index) => {
-                        bb.position.add(bb.velocity);
-
-                        let botBulletHit = false;
-                        for (let obj of colliders) {
-                            let box = new THREE.Box3().setFromObject(obj);
-                            if (box.containsPoint(bb.position)) {
-                                botBulletHit = true;
-                                break;
-                            }
-                        }
-
-                        if (botBulletHit) {
-                            scene.remove(bb);
-                            botBullets.splice(index, 1);
-                            return;
-                        }
-
-                        if (bb.position.distanceTo(camera.position) < 1.5) {
-                            playerHP -= 15;
-                            document.getElementById('player-hp').style.width = Math.max(0, playerHP) + '%';
-
-                            document.body.style.backgroundColor = "#5a1818";
-                            setTimeout(() => document.body.style.backgroundColor = "#0f0f1a", 100);
-
-                            scene.remove(bb);
-                            botBullets.splice(index, 1);
-
-                            if (playerHP <= 0) {
-                                isGameOver = true;
-                                isInGame = false;
-                                document.exitPointerLock();
-                                clearInterval(botShootInterval);
-                                document.getElementById('defeat-screen').classList.add('active');
-                            }
                         }
                     });
                 }
