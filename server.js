@@ -1,44 +1,39 @@
-const express = require('http');
-const app = require('express')();
+const express = require('express');
+const app = express();
 const server = require('http').createServer(app);
 const io = require('socket.io')(server);
-
-// Fichiers statiques
 const path = require('path');
-app.use(express.static(path.join(__dirname, 'public'))); // ou __dirname direct selon ta structure
+
+// Servir les fichiers statiques (ton index.html doit être à la racine ou dans un dossier public selon ton choix)
+// Si ton index.html est directement à la racine du projet, utilise __dirname tout court :
+app.use(express.static(__dirname));
 
 let waitingPlayers = [];
-let matches = {};
 
 io.on('connection', (socket) => {
     console.log(`Joueur connecté : ${socket.id}`);
 
-    // Le joueur clique sur "Jouer" ou entre dans la file
     socket.on('find_match', () => {
         console.log(`Recherche de match pour ${socket.id}`);
         waitingPlayers.push(socket);
 
-        // Si on a 2 vrais joueurs immédiatement
         if (waitingPlayers.length >= 2) {
             let p1 = waitingPlayers.shift();
             let p2 = waitingPlayers.shift();
-            createMatch(p1, p2, false); // false = pas de bot
+            createMatch(p1, p2, false);
         } else {
-            // Lancer un compte à rebours de 10 secondes pour ce joueur seul
             socket.matchTimeout = setTimeout(() => {
-                // Vérifier si le joueur est toujours dans la file d'attente
                 let index = waitingPlayers.indexOf(socket);
                 if (index !== -1) {
                     waitingPlayers.splice(index, 1);
                     console.log(`Pas de joueur trouvé pour ${socket.id}, ajout d'un bot.`);
-                    createMatch(socket, null, true); // true = avec un bot
+                    createMatch(socket, null, true);
                 }
             }, 10000); // 10 secondes
         }
     });
 
     socket.on('disconnect', () => {
-        // Nettoyer la file d'attente si le joueur déco
         let index = waitingPlayers.indexOf(socket);
         if (index !== -1) {
             waitingPlayers.splice(index, 1);
@@ -49,7 +44,6 @@ io.on('connection', (socket) => {
 });
 
 function createMatch(p1, p2, isBot) {
-    // Si c'est un bot, p2 sera géré par l'IA du serveur ou simulé
     if (p1.matchTimeout) clearTimeout(p1.matchTimeout);
     if (p2 && p2.matchTimeout) clearTimeout(p2.matchTimeout);
 
@@ -58,3 +52,8 @@ function createMatch(p1, p2, isBot) {
         p2.emit('match_found', { opponent: p1.id });
     }
 }
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+    console.log(`Serveur démarré sur le port ${PORT}`);
+});
