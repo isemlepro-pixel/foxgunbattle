@@ -51,7 +51,6 @@
 </head>
 <body>
 
-    <!-- Écran de Connexion / Inscription -->
     <div id="auth-screen" class="screen active">
         <div class="container">
             <h1>FoxGunBattle</h1>
@@ -182,7 +181,7 @@
 
     <script>
         const socket = io();
-        let currentUsername = "";
+        let currentUsername = localStorage.getItem('fox_username') || "";
         let mouseSensitivity = 0.005;
         let chosenWeapon = { id: 'Rifle', name: "Fusil d'Assaut", damage: 20, speed: 0.9 };
         let lastGunWeapon = { id: 'Rifle', name: "Fusil d'Assaut", damage: 20, speed: 0.9 };
@@ -192,8 +191,14 @@
 
         document.getElementById('card-Rifle').classList.add('selected');
 
+        // Si un pseudo est déjà stocké en mémoire locale, on va directement au menu !
+        if (currentUsername) {
+            document.getElementById('logged-user-label').innerText = currentUsername;
+            showScreen('main-menu');
+        }
+
         async function registerUser() {
-            let user = document.getElementById('auth-user').value;
+            let user = document.getElementById('auth-user').value.trim();
             let pass = document.getElementById('auth-pass').value;
 
             let res = await fetch('/api/register', {
@@ -205,6 +210,7 @@
 
             if (data.success) {
                 currentUsername = data.username;
+                localStorage.setItem('fox_username', currentUsername);
                 document.getElementById('logged-user-label').innerText = currentUsername;
                 showScreen('main-menu');
             } else {
@@ -213,7 +219,7 @@
         }
 
         async function loginUser() {
-            let user = document.getElementById('auth-user').value;
+            let user = document.getElementById('auth-user').value.trim();
             let pass = document.getElementById('auth-pass').value;
 
             let res = await fetch('/api/login', {
@@ -225,6 +231,7 @@
 
             if (data.success) {
                 currentUsername = data.username;
+                localStorage.setItem('fox_username', currentUsername);
                 document.getElementById('logged-user-label').innerText = currentUsername;
                 showScreen('main-menu');
             } else {
@@ -234,6 +241,7 @@
 
         function logoutUser() {
             currentUsername = "";
+            localStorage.removeItem('fox_username');
             document.getElementById('auth-user').value = "";
             document.getElementById('auth-pass').value = "";
             document.getElementById('auth-error').innerText = "";
@@ -243,7 +251,13 @@
         function returnToMenu() {
             document.getElementById('victory-screen').classList.remove('active');
             document.getElementById('defeat-screen').classList.remove('active');
-            showScreen('main-menu');
+            
+            if (currentUsername) {
+                document.getElementById('logged-user-label').innerText = currentUsername;
+                showScreen('main-menu');
+            } else {
+                showScreen('auth-screen');
+            }
         }
 
         function equipWeapon(id, name, damage, speed) {
@@ -459,7 +473,7 @@
                     isInGame = false;
                     try { document.exitPointerLock(); } catch(e){}
                     alert("L'adversaire s'est déconnecté !");
-                    showScreen('main-menu');
+                    returnToMenu();
                 }
             });
 
