@@ -51,7 +51,7 @@
 </head>
 <body>
 
-    <!-- Écran de Connexion / Inscription style Roblox -->
+    <!-- Écran de Connexion / Inscription -->
     <div id="auth-screen" class="screen active">
         <div class="container">
             <h1>FoxGunBattle</h1>
@@ -76,11 +76,12 @@
     <div id="main-menu" class="screen">
         <div class="container">
             <h1>FoxGunBattle</h1>
-            <p style="color: #ccc; margin-bottom: 20px;">Mode FPS 3D En Ligne (1V1)</p>
+            <p style="color: #ccc; margin-bottom: 20px;">Connecté en tant que : <span id="logged-user-label" style="color:#2ecc71; font-weight:bold;"></span></p>
             
             <button onclick="showScreen('weapon-screen')" style="background: #16213e; border: 1px solid #e94560;">Choisir l'arme/outil (Actif : <span id="current-weapon-label">Fusil d'Assaut</span>)</button>
             <button onclick="startMatchmaking()">Jouer en Ligne</button>
             <button onclick="showScreen('settings-screen')" style="background: #16213e; border: 1px solid #aaa;">Paramètres</button>
+            <button onclick="logoutUser()" style="background: #555; font-size:0.9rem; padding:10px;">Se déconnecter</button>
         </div>
     </div>
 
@@ -167,7 +168,7 @@
         <div class="container" style="border-color: #2ecc71;">
             <h1 style="color: #2ecc71;">VICTOIRE !</h1>
             <p style="color: #ccc; margin-bottom: 20px;">Vous avez éliminé l'adversaire !</p>
-            <button onclick="location.reload()" style="background: #2ecc71;">Rejouer</button>
+            <button onclick="returnToMenu()" style="background: #2ecc71;">Retour au Menu</button>
         </div>
     </div>
 
@@ -175,7 +176,7 @@
         <div class="container" style="border-color: #e94560;">
             <h1 style="color: #e94560;">DÉFAITE...</h1>
             <p id="defeat-message" style="color: #ccc; margin-bottom: 20px;">Votre adversaire vous a éliminé !</p>
-            <button onclick="location.reload()">Réessayer</button>
+            <button onclick="returnToMenu()">Retour au Menu</button>
         </div>
     </div>
 
@@ -204,6 +205,7 @@
 
             if (data.success) {
                 currentUsername = data.username;
+                document.getElementById('logged-user-label').innerText = currentUsername;
                 showScreen('main-menu');
             } else {
                 document.getElementById('auth-error').innerText = data.message;
@@ -223,10 +225,25 @@
 
             if (data.success) {
                 currentUsername = data.username;
+                document.getElementById('logged-user-label').innerText = currentUsername;
                 showScreen('main-menu');
             } else {
                 document.getElementById('auth-error').innerText = data.message;
             }
+        }
+
+        function logoutUser() {
+            currentUsername = "";
+            document.getElementById('auth-user').value = "";
+            document.getElementById('auth-pass').value = "";
+            document.getElementById('auth-error').innerText = "";
+            showScreen('auth-screen');
+        }
+
+        function returnToMenu() {
+            document.getElementById('victory-screen').classList.remove('active');
+            document.getElementById('defeat-screen').classList.remove('active');
+            showScreen('main-menu');
         }
 
         function equipWeapon(id, name, damage, speed) {
@@ -278,7 +295,7 @@
         }
 
         function cancelMatchmaking() {
-            location.reload();
+            showScreen('main-menu');
         }
 
         socket.on('waiting_for_opponent', () => {
@@ -316,7 +333,6 @@
             const ramps = [];     
             const customBuilds = []; 
 
-            // SOL TEXTURÉ DE BASE
             const floorGroup = new THREE.Group();
             const tileSize = 6;
             for (let x = -30; x < 30; x += tileSize) {
@@ -333,7 +349,6 @@
             }
             scene.add(floorGroup);
 
-            // Murs de l'arène
             const wallMat = new THREE.MeshStandardMaterial({ color: 0xe94560 });
             const wall1 = new THREE.Mesh(new THREE.BoxGeometry(60, 6, 1), wallMat);
             wall1.position.set(0, 3, -30);
@@ -355,7 +370,6 @@
             scene.add(wall4);
             colliders.push(wall4);
 
-            // ADVERSAIRE EN LIGNE (AVATAR)
             const enemyGroup = new THREE.Group();
             const torso = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2, 0.6), new THREE.MeshStandardMaterial({ color: 0xff476f }));
             torso.position.y = 1;
@@ -372,7 +386,6 @@
             camera.add(playerWeapon);
             scene.add(camera);
 
-            // Position de départ selon le rôle attribué par le serveur
             if (role === 'p1') {
                 camera.position.set(0, 2, 20);
                 enemyGroup.position.set(0, 0, -20);
@@ -381,8 +394,8 @@
                 enemyGroup.position.set(0, 0, 20);
             }
 
-            let enemyHP = 100;
             let playerHP = 100;
+            document.getElementById('player-hp').style.width = '100%';
             let isGameOver = false;
             let matchStarted = false;
             let currentBuildMode = 'WEAPON'; 
@@ -441,8 +454,13 @@
             });
 
             socket.on('opponent_disconnected', () => {
-                alert("L'adversaire s'est déconnecté !");
-                location.reload();
+                if (!isGameOver) {
+                    isGameOver = true;
+                    isInGame = false;
+                    try { document.exitPointerLock(); } catch(e){}
+                    alert("L'adversaire s'est déconnecté !");
+                    showScreen('main-menu');
+                }
             });
 
             let bullets = [];
