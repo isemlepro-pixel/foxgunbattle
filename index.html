@@ -232,18 +232,27 @@
             pointLight.position.set(0, 15, 0);
             scene.add(pointLight);
 
-            // Liste des objets solides pour les collisions (joueur et tirs)
+            // Liste globale des obstacles solides (murs d'arène, escalier, murs construits)
             const colliders = [];
 
-            // Sol structuré et coloré
-            const floor = new THREE.Mesh(
-                new THREE.PlaneGeometry(60, 60),
-                new THREE.MeshStandardMaterial({ color: 0x16213e, roughness: 0.9 })
-            );
-            floor.rotation.x = -Math.PI / 2;
-            scene.add(floor);
+            // SOL TEXTURÉ AVEC DES DALLES (Génération d'une grille visible)
+            const floorGroup = new THREE.Group();
+            const tileSize = 6;
+            for (let x = -30; x < 30; x += tileSize) {
+                for (let z = -30; z < 30; z += tileSize) {
+                    const color = ((x + z) / tileSize) % 2 === 0 ? 0x16213e : 0x1a1a2e;
+                    const tile = new THREE.Mesh(
+                        new THREE.PlaneGeometry(tileSize - 0.2, tileSize - 0.2),
+                        new THREE.MeshStandardMaterial({ color: color, roughness: 0.8 })
+                    );
+                    tile.rotation.x = -Math.PI / 2;
+                    tile.position.set(x + tileSize/2, 0, z + tileSize/2);
+                    floorGroup.add(tile);
+                }
+            }
+            scene.add(floorGroup);
 
-            // Murs de l'arène (Ajoutés aux colliders)
+            // Murs de l'arène
             const wallMat = new THREE.MeshStandardMaterial({ color: 0xe94560 });
             const wall1 = new THREE.Mesh(new THREE.BoxGeometry(60, 6, 1), wallMat);
             wall1.position.set(0, 3, -30);
@@ -265,29 +274,18 @@
             scene.add(wall4);
             colliders.push(wall4);
 
-            // ESCALIER INTERACTIF
+            // ESCALIER FONCTIONNEL (Marches montantes)
             const stairGroup = new THREE.Group();
-            const stepMat = new THREE.MeshStandardMaterial({ color: 0x0f3460 });
-            for (let i = 0; i < 6; i++) {
-                const step = new THREE.Mesh(new THREE.BoxGeometry(4, 0.4 + (i * 0.3), 1), stepMat);
-                step.position.set(15, (0.4 + (i * 0.3)) / 2, -10 - (i * 0.9));
+            const stepMat = new THREE.MeshStandardMaterial({ color: 0x0f3460, roughness: 0.5 });
+            const numSteps = 8;
+            for (let i = 0; i < numSteps; i++) {
+                const step = new THREE.Mesh(new THREE.BoxGeometry(5, 0.5 + (i * 0.4), 1.2), stepMat);
+                // Position progressive en hauteur et en profondeur
+                step.position.set(0, (0.5 + (i * 0.4)) / 2, -10 - (i * 1.1));
                 stairGroup.add(step);
                 colliders.push(step);
             }
             scene.add(stairGroup);
-
-            function createTree(x, z) {
-                const trunk = new THREE.Mesh(new THREE.BoxGeometry(0.8, 3, 0.8), new THREE.MeshStandardMaterial({ color: 0x8B4513 }));
-                trunk.position.set(x, 1.5, z);
-                const leaves = new THREE.Mesh(new THREE.ConeGeometry(2, 4, 6), new THREE.MeshStandardMaterial({ color: 0x2e8b57 }));
-                leaves.position.set(x, 4, z);
-                scene.add(trunk);
-                scene.add(leaves);
-            }
-
-            createTree(-22, -10);
-            createTree(-20, 12);
-            createTree(22, 5);
 
             const enemyGroup = new THREE.Group();
             const torso = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2, 0.6), new THREE.MeshStandardMaterial({ color: 0xff476f }));
@@ -308,7 +306,7 @@
 
             let enemyHP = 100;
             let playerHP = 100;
-            let botSpeed = 0.04;
+            let botSpeed = 0.035;
             let isGameOver = false;
             let matchStarted = false;
             let wallsPlaced = 0;
@@ -363,7 +361,7 @@
             const botBulletGeo = new THREE.SphereGeometry(0.25, 8, 8);
             const botBulletMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
 
-            // SYSTÈMES DE TIR AVEC GESTION DES OBSTACLES (COLLISIONS BALLES)
+            // TIR DU JOUEUR
             window.onmousedown = (e) => {
                 if (document.pointerLockElement === gameScreen && e.button === 0 && enemyHP > 0 && !isGameOver && matchStarted && !isSettingsOpen) {
                     let bullet = new THREE.Mesh(bulletGeo, bulletMat);
@@ -380,7 +378,7 @@
             window.onkeydown = (e) => {
                 keys[e.key.toLowerCase()] = true;
 
-                // Construction de mur limitée avec vérification
+                // CONSTRUCTION DE MUR (Touche F) AVEC AJOUT DANS LES COLLIDERS
                 if (e.key.toLowerCase() === 'f' && matchStarted && !isGameOver && !isSettingsOpen) {
                     if (wallsPlaced < maxWalls) {
                         const wallGeo = new THREE.BoxGeometry(4, 3, 0.4);
@@ -394,7 +392,7 @@
                         builtWall.rotation.y = camera.rotation.y;
 
                         scene.add(builtWall);
-                        colliders.push(builtWall); // Le mur devient un obstacle solide pour les tirs et déplacements
+                        colliders.push(builtWall); // Empêche le joueur, le bot et les tirs de traverser
 
                         wallsPlaced++;
                         document.getElementById('wall-count').innerText = maxWalls - wallsPlaced;
@@ -437,12 +435,11 @@
                     if (keys['q'] || keys['a']) nextPos.addScaledVector(sideDir, speed);
                     if (keys['d']) nextPos.addScaledVector(sideDir, -speed);
 
-                    // GESTION DES COLLISIONS JOUEUR / MURS
+                    // COLLISION JOUEUR AVEC TOUS LES OBSTACLES (Y COMPRIS LES MURS CONSTRUITS)
                     let canMove = true;
                     for (let obj of colliders) {
                         let box = new THREE.Box3().setFromObject(obj);
-                        // On élargit légèrement la boîte pour simuler la taille du joueur
-                        box.expandByScalar(0.6);
+                        box.expandByScalar(0.5); // Marge de collision
                         if (box.containsPoint(nextPos)) {
                             canMove = false;
                             break;
@@ -456,21 +453,35 @@
                     camera.position.x = Math.max(-28, Math.min(28, camera.position.x));
                     camera.position.z = Math.max(-28, Math.min(28, camera.position.z));
 
+                    // DÉPLACEMENT DU BOT AVEC GESTION DE COLLISION ANTI-TRAVERSÉE DE MUR
                     if (enemyHP > 0) {
                         let botDir = new THREE.Vector3().subVectors(camera.position, enemyGroup.position);
                         botDir.y = 0;
                         botDir.normalize();
-                        enemyGroup.position.addScaledVector(botDir, botSpeed);
+                        
+                        let nextBotPos = enemyGroup.position.clone().addScaledVector(botDir, botSpeed);
+                        let botCanMove = true;
+
+                        for (let obj of colliders) {
+                            let box = new THREE.Box3().setFromObject(obj);
+                            box.expandByScalar(0.8);
+                            if (box.containsPoint(nextBotPos)) {
+                                botCanMove = false;
+                                break;
+                            }
+                        }
+
+                        if (botCanMove) {
+                            enemyGroup.position.copy(nextBotPos);
+                        }
                         enemyGroup.lookAt(camera.position.x, enemyGroup.position.y, camera.position.z);
                     }
 
-                    // GESTION DES TIRS JOUEUR (Bloqués par les murs)
+                    // GESTION DES TIRS DU JOUEUR (Bloqués par les murs et obstacles)
                     bullets.forEach((b, index) => {
                         b.position.add(b.velocity);
 
                         let bulletHit = false;
-
-                        // Vérification collision tirs avec les obstacles/murs
                         for (let obj of colliders) {
                             let box = new THREE.Box3().setFromObject(obj);
                             if (box.containsPoint(b.position)) {
@@ -511,7 +522,7 @@
                         }
                     });
 
-                    // GESTION DES TIRS DU BOT (Bloqués par les murs)
+                    // GESTION DES TIRS DU BOT (Bloqués par les murs construits)
                     botBullets.forEach((bb, index) => {
                         bb.position.add(bb.velocity);
 
